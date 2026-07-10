@@ -1028,55 +1028,175 @@ global $c, $db, $campId;
                 </div>
 
                 <div id="s2s_container">
-                    <?php 
-                    for ($i = 0; $i < count($c->postback->s2sPostbacks); $i++) { 
-                        $s2sUrl = $c->postback->s2sPostbacks[$i]->url;
-                        $s2sMethod = $c->postback->s2sPostbacks[$i]->method;
-                        $s2sEvents = $c->postback->s2sPostbacks[$i]->events;
+                    <?php
+                    // "+ Add" (cloneData) clones the first existing .s2s row, so the list must
+                    // render at least one row (matching minLimit:1) — otherwise there is nothing
+                    // to clone and the section looks empty / Add appears dead. Seed a blank entry
+                    // when the campaign has no saved postbacks. A blank row (empty url, no events)
+                    // never fires and is skipped on save/runtime, so it is harmless.
+                    $s2sList = $c->postback->s2sPostbacks;
+                    if (empty($s2sList)) {
+                        $s2sList = [new S2sPostback('', 'GET', [])];
+                    }
+                    for ($i = 0; $i < count($s2sList); $i++) {
+                        $s2sUrl = $s2sList[$i]->url;
+                        $s2sMethod = $s2sList[$i]->method;
+                        $s2sEvents = $s2sList[$i]->events;
+                        $s2sType = $s2sList[$i]->type ?: 'url';
+                        $s2sCreds = $s2sList[$i]->creds;
+                        $s2sEventName = $s2sList[$i]->eventName;
+                        $s2sActionSource = $s2sList[$i]->actionSource ?: 'website';
+                        $s2sTestEventCode = $s2sList[$i]->testEventCode;
+                        $s2sMatchLogic = $s2sList[$i]->matchLogic ?: 'or';
+                        $s2sPixelId = $s2sList[$i]->pixelId;
+                        $s2sAccessToken = $s2sList[$i]->accessToken;
+                        // Legacy prefill: if only a base64 creds blob was stored (not a macro),
+                        // split it back into the two fields for display.
+                        if ($s2sPixelId === '' && $s2sAccessToken === '' && $s2sCreds !== '' && strpos($s2sCreds, '{') === false) {
+                            $dec = base64_decode($s2sCreds, true);
+                            if ($dec !== false && strpos($dec, ':') !== false) {
+                                [$s2sPixelId, $s2sAccessToken] = explode(':', $dec, 2);
+                            }
+                        }
+                        $knownStatuses = ['Lead','Purchase','Reject','Trash'];
+                        // customEvents input shows the entry's events that are NOT known statuses.
+                        $s2sCustomEvents = implode(',', array_values(array_diff($s2sEvents, $knownStatuses)));
+                        $isFb = ($s2sType === 'fb_offline');
+                        $urlStyle = $isFb ? 'display:none;' : '';
+                        $fbStyle = $isFb ? '' : 'display:none;';
                     ?>
                     <div class="form-group-inner s2s">
+                        <hr class="s2s-divider" style="border:0;border-top:2px solid rgba(128,128,128,0.35);margin:22px 0 16px;" />
                         <div class="row">
                             <div class="col-lg-3 col-md-3 col-sm-3 col-xs-3">
-                                <label class="login2 pull-left pull-left-pro">
-                                    <i class="bi bi-info-circle admin-info-icon" title="Inside the S2S-postback address you can use the following macros: {clickid}, {userid}, {px}, {domain}, {status}"></i>
-                                    Address:
+                                <label class="login2 pull-left pull-left-pro"> Postback type:
                                 </label>
-                                <br /><br />
                             </div>
                             <div class="col-lg-5 col-md-5 col-sm-5 col-xs-5">
-                                <div class="input-group">
-                                    <input type="text" class="form-control" placeholder="https://s2s-postback.com" value="<?= $s2sUrl ?>" name="postback.s2s[<?= $i ?>][url]" />
-                                </div>
+                                <select class="form-select s2s-type-select" name="postback.s2s[<?= $i ?>][type]">
+                                    <option value="url" <?= ($s2sType === "url" ? ' selected' : '') ?>>S2S URL</option>
+                                    <option value="fb_offline" <?= ($s2sType === "fb_offline" ? ' selected' : '') ?>>FB Offline Conversion</option>
+                                </select>
                             </div>
                             <div class="col-lg-1 col-md-1 col-sm-1 col-xs-1">
                                 <a class="remove-s2s-item btn btn-danger btn-sm" title="Delete"><i class="bi bi-trash"></i></a>
                             </div>
                         </div>
-                        <div class="row">
-                            <div class="col-lg-3 col-md-3 col-sm-3 col-xs-3">
-                                <label class="login2 pull-left pull-left-pro"> S2S-Postback send method:
-                                </label>
+
+                        <div class="s2s-url-fields" style="<?= $urlStyle ?>">
+                            <div class="row">
+                                <div class="col-lg-3 col-md-3 col-sm-3 col-xs-3">
+                                    <label class="login2 pull-left pull-left-pro">
+                                        <i class="bi bi-info-circle admin-info-icon" title="Inside the S2S-postback address you can use the following macros: {clickid}, {userid}, {px}, {domain}, {status}"></i>
+                                        Address:
+                                    </label>
+                                    <br /><br />
+                                </div>
+                                <div class="col-lg-5 col-md-5 col-sm-5 col-xs-5">
+                                    <div class="input-group">
+                                        <input type="text" class="form-control" placeholder="https://s2s-postback.com" value="<?= $s2sUrl ?>" name="postback.s2s[<?= $i ?>][url]" />
+                                    </div>
+                                </div>
                             </div>
-                            <div class="col-lg-3 col-md-3 col-sm-3 col-xs-3">
-                                <select class="form-select" name="postback.s2s[<?= $i ?>][method]">
-                                    <option value="GET" <?= ($s2sMethod === "GET" ? ' selected' : '') ?>> GET
-                                    </option>
-                                    <option value="POST" <?= ($s2sMethod === "POST" ? ' selected' : '') ?>> POST
-                                    </option>
-                                </select>
+                            <div class="row">
+                                <div class="col-lg-3 col-md-3 col-sm-3 col-xs-3">
+                                    <label class="login2 pull-left pull-left-pro"> S2S-Postback send method:
+                                    </label>
+                                </div>
+                                <div class="col-lg-3 col-md-3 col-sm-3 col-xs-3">
+                                    <select class="form-select" name="postback.s2s[<?= $i ?>][method]">
+                                        <option value="GET" <?= ($s2sMethod === "GET" ? ' selected' : '') ?>> GET
+                                        </option>
+                                        <option value="POST" <?= ($s2sMethod === "POST" ? ' selected' : '') ?>> POST
+                                        </option>
+                                    </select>
+                                </div>
                             </div>
                         </div>
+
+                        <div class="s2s-fb-fields" style="<?= $fbStyle ?>">
+                            <div class="row">
+                                <div class="col-lg-3 col-md-3 col-sm-3 col-xs-3">
+                                    <label class="login2 pull-left pull-left-pro">
+                                        <i class="bi bi-info-circle admin-info-icon" title="Facebook Pixel / Dataset ID (numeric). One ad account per campaign."></i>
+                                        FB Pixel ID:
+                                    </label>
+                                    <br /><br />
+                                </div>
+                                <div class="col-lg-5 col-md-5 col-sm-5 col-xs-5">
+                                    <div class="input-group">
+                                        <input type="text" class="form-control" placeholder="123456789012345" value="<?= htmlspecialchars($s2sPixelId, ENT_QUOTES) ?>" name="postback.s2s[<?= $i ?>][pixelId]" />
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-lg-3 col-md-3 col-sm-3 col-xs-3">
+                                    <label class="login2 pull-left pull-left-pro">
+                                        <i class="bi bi-info-circle admin-info-icon" title="Facebook Conversions API access token. Combined with the Pixel ID into base64 on save."></i>
+                                        FB Access token:
+                                    </label>
+                                    <br /><br />
+                                </div>
+                                <div class="col-lg-5 col-md-5 col-sm-5 col-xs-5">
+                                    <div class="input-group">
+                                        <input type="text" class="form-control" placeholder="EAAB...access token" value="<?= htmlspecialchars($s2sAccessToken, ENT_QUOTES) ?>" name="postback.s2s[<?= $i ?>][accessToken]" />
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-lg-3 col-md-3 col-sm-3 col-xs-3">
+                                    <label class="login2 pull-left pull-left-pro"> FB event name (optional):
+                                    </label>
+                                    <br /><br />
+                                </div>
+                                <div class="col-lg-5 col-md-5 col-sm-5 col-xs-5">
+                                    <div class="input-group">
+                                        <input type="text" class="form-control" placeholder="Purchase" value="<?= htmlspecialchars($s2sEventName, ENT_QUOTES) ?>" name="postback.s2s[<?= $i ?>][eventName]" />
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-lg-3 col-md-3 col-sm-3 col-xs-3">
+                                    <label class="login2 pull-left pull-left-pro"> FB action source:
+                                    </label>
+                                    <br /><br />
+                                </div>
+                                <div class="col-lg-3 col-md-3 col-sm-3 col-xs-3">
+                                    <div class="input-group">
+                                        <input type="text" class="form-control" placeholder="website" value="<?= htmlspecialchars($s2sActionSource, ENT_QUOTES) ?>" name="postback.s2s[<?= $i ?>][actionSource]" />
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-lg-3 col-md-3 col-sm-3 col-xs-3">
+                                    <label class="login2 pull-left pull-left-pro">
+                                        <i class="bi bi-info-circle admin-info-icon" title="From FB Events Manager > Test Events. Required to fire a test without polluting real optimization data."></i>
+                                        FB test event code (optional):
+                                    </label>
+                                    <br /><br />
+                                </div>
+                                <div class="col-lg-3 col-md-3 col-sm-3 col-xs-3">
+                                    <div class="input-group">
+                                        <input type="text" class="form-control" placeholder="TEST12345" value="<?= htmlspecialchars($s2sTestEventCode, ENT_QUOTES) ?>" name="postback.s2s[<?= $i ?>][testEventCode]" />
+                                    </div>
+                                </div>
+                                <div class="col-lg-4 col-md-4 col-sm-4 col-xs-4">
+                                    <a href="javascript:void(0)" class="btn btn-primary btn-sm s2s-fb-test-btn"><i class="bi bi-send"></i> Send test event</a>
+                                    <div class="s2s-fb-test-result" style="margin-top:6px;font-size:12px;"></div>
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="row">
                             <div class="col-lg-3 col-md-3 col-sm-3 col-xs-3">
-                                <label class="login2 pull-left pull-left-pro"> Events for which S2S-postback will be sent:
+                                <label class="login2 pull-left pull-left-pro"> Events for which this postback will be sent:
                                 </label>
                             </div>
                             <div class="col-lg-5 col-md-5 col-sm-5 col-xs-5">
                                 <br />
                                 <br/>
                                 <?php
-                                $statuses = ['Lead','Purchase','Reject','Trash'];
-                                foreach ($statuses as $status)
+                                foreach ($knownStatuses as $status)
                                 {?>
                                     <div class="form-check form-switch">
                                         <label for="<?=$status?><?=$i?>" class="form-check-label"><?=$status?></label>
@@ -1085,6 +1205,33 @@ global $c, $db, $campId;
                                 <?php
                                 }
                                 ?>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-lg-3 col-md-3 col-sm-3 col-xs-3">
+                                <label class="login2 pull-left pull-left-pro">
+                                    <i class="bi bi-info-circle admin-info-icon" title="Comma-separated custom event names, e.g. install,subscribe. Merged with the checked statuses above."></i>
+                                    Custom events (comma-separated):
+                                </label>
+                            </div>
+                            <div class="col-lg-5 col-md-5 col-sm-5 col-xs-5">
+                                <div class="input-group">
+                                    <input type="text" class="form-control" placeholder="install,subscribe" value="<?= htmlspecialchars($s2sCustomEvents, ENT_QUOTES) ?>" name="postback.s2s[<?= $i ?>][customEvents]" />
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-lg-3 col-md-3 col-sm-3 col-xs-3">
+                                <label class="login2 pull-left pull-left-pro">
+                                    <i class="bi bi-info-circle admin-info-icon" title="OR: fire if the current event is listed. AND: fire only when every listed event has occurred for the click."></i>
+                                    Match logic:
+                                </label>
+                            </div>
+                            <div class="col-lg-3 col-md-3 col-sm-3 col-xs-3">
+                                <select class="form-select" name="postback.s2s[<?= $i ?>][matchLogic]">
+                                    <option value="or" <?= ($s2sMatchLogic === "or" ? ' selected' : '') ?>>OR (any listed event)</option>
+                                    <option value="and" <?= ($s2sMatchLogic === "and" ? ' selected' : '') ?>>AND (all listed events)</option>
+                                </select>
                             </div>
                         </div>
                     </div>
@@ -1188,14 +1335,58 @@ global $c, $db, $campId;
             removeConfirm: false
         });
 
+        // Show/hide url-vs-fb fields per s2s entry based on its type selector.
+        // Delegated so it also works on rows added via #add-s2s-item (clones).
+        function s2sToggleType(row) {
+            var type = ($(row).find('.s2s-type-select').val() || 'url');
+            var isFb = (type === 'fb_offline');
+            $(row).find('.s2s-url-fields').toggle(!isFb);
+            $(row).find('.s2s-fb-fields').toggle(isFb);
+        }
+        window.s2sToggleAllTypes = function () {
+            $('#s2s_container .s2s').each(function () { s2sToggleType(this); });
+        };
+        $('#s2s_container').on('change', '.s2s-type-select', function () {
+            s2sToggleType($(this).closest('.s2s'));
+        });
+
+        // Send a one-off FB test event straight from this page using the row's
+        // pixel/token/testEventCode. Delegated so it also works on cloned rows.
+        $('#s2s_container').on('click', '.s2s-fb-test-btn', function () {
+            var $row = $(this).closest('.s2s');
+            var $res = $row.find('.s2s-fb-test-result');
+            var body = new URLSearchParams({
+                pixelId: $row.find('input[name$="[pixelId]"]').val() || '',
+                accessToken: $row.find('input[name$="[accessToken]"]').val() || '',
+                testEventCode: $row.find('input[name$="[testEventCode]"]').val() || '',
+                eventName: $row.find('input[name$="[eventName]"]').val() || '',
+                actionSource: $row.find('input[name$="[actionSource]"]').val() || ''
+            });
+            $res.css('color', '').text('Sending…');
+            fetch('fbtest.php', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body.toString() })
+                .then(function (r) { return r.json(); })
+                .then(function (r) {
+                    if (r && r.ok) {
+                        $res.css('color', 'green').text('OK (HTTP ' + r.http_code + ') — check FB Events Manager → Test Events');
+                    } else {
+                        $res.css('color', 'red').text('Error: ' + ((r && (r.error || r.response)) || 'request failed'));
+                    }
+                })
+                .catch(function (e) { $res.css('color', 'red').text('Request failed: ' + e); });
+        });
+
         $('#add-s2s-item').cloneData({
             mainContainerId: 's2s_container',
             cloneContainer: 's2s',
             removeButtonClass: 'remove-s2s-item',
             maxLimit: 5,
             minLimit: 1,
-            removeConfirm: false
+            removeConfirm: false,
+            afterRender: function () { window.s2sToggleAllTypes(); }
         });
+
+        // Initial pass for the server-rendered rows.
+        window.s2sToggleAllTypes();
 
         window.scriptRedirectFlowStepCounts = <?= json_encode($scriptFlowStepCounts) ?>;
         window.scriptRedirectMaxStepCount = <?= (int)$scriptMaxStepCount ?>;

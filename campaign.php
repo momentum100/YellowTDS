@@ -629,17 +629,93 @@ class S2sPostback implements JsonSerializable
     public string $url;
     public string $method;
     public array $events;
+    // fb_offline additions (backward-compatible: every new field has a default)
+    public string $type;
+    public string $creds;
+    public string $eventName;
+    public string $actionSource;
+    public string $testEventCode;
+    // Trigger logic: 'or' (fire if the current event is in the list — legacy
+    // behavior) or 'and' (fire only if EVERY event in the list has occurred).
+    public string $matchLogic;
+    // FB pixel id + access token entered as two separate UI fields (1 ad account
+    // per campaign). The base64 `creds` blob the sender consumes is assembled
+    // on the fly from these in fromArray(); `creds` stays the runtime source.
+    public string $pixelId;
+    public string $accessToken;
 
-    public function __construct($url, $method, $events)
-    {
+    public function __construct(
+        $url,
+        $method,
+        $events,
+        string $type = 'url',
+        string $creds = '',
+        string $eventName = '',
+        string $actionSource = 'website',
+        string $testEventCode = '',
+        string $matchLogic = 'or',
+        string $pixelId = '',
+        string $accessToken = ''
+    ) {
         $this->url = $url;
         $this->method = $method;
         $this->events = $events;
+        $this->type = $type;
+        $this->creds = $creds;
+        $this->eventName = $eventName;
+        $this->actionSource = $actionSource;
+        $this->testEventCode = $testEventCode;
+        $this->matchLogic = $matchLogic;
+        $this->pixelId = $pixelId;
+        $this->accessToken = $accessToken;
     }
 
     public static function fromArray($arr): S2sPostback
     {
-        return new S2sPostback($arr['url'], $arr['method'], $arr['events']);
+        // Old configs have no url? never happened before, but keep url/method/events
+        // required-ish while the fb_offline fields default so legacy JSON still loads.
+        //
+        // Effective events = checked statuses ∪ free-text "customEvents" (a
+        // comma-separated, UI-only field that is NOT stored on the model). We
+        // fold it into `events` here so both the runtime trigger logic and the
+        // admin re-render see one unified, deduped list.
+        $events = $arr['events'] ?? [];
+        if (!is_array($events)) {
+            $events = [];
+        }
+        if (isset($arr['customEvents']) && is_string($arr['customEvents'])) {
+            foreach (explode(',', $arr['customEvents']) as $ce) {
+                $events[] = $ce;
+            }
+        }
+        $events = array_values(array_unique(array_filter(
+            array_map(static fn($e) => trim((string)$e), $events),
+            static fn($e) => $e !== ''
+        )));
+
+        // FB creds: two UI fields (pixelId + accessToken). Assemble the base64
+        // blob the sender expects on the fly. Fall back to a legacy `creds` value
+        // (raw base64 blob or a {c.fbcreds} macro) when the two fields are empty.
+        $pixelId = trim((string)($arr['pixelId'] ?? ''));
+        $accessToken = trim((string)($arr['accessToken'] ?? ''));
+        $creds = (string)($arr['creds'] ?? '');
+        if ($pixelId !== '' && $accessToken !== '') {
+            $creds = base64_encode($pixelId . ':' . $accessToken);
+        }
+
+        return new S2sPostback(
+            $arr['url'] ?? '',
+            $arr['method'] ?? '',
+            $events,
+            $arr['type'] ?? 'url',
+            $creds,
+            $arr['eventName'] ?? '',
+            $arr['actionSource'] ?? 'website',
+            $arr['testEventCode'] ?? '',
+            $arr['matchLogic'] ?? 'or',
+            $pixelId,
+            $accessToken
+        );
     }
 
     public function jsonSerialize(): array
@@ -647,7 +723,15 @@ class S2sPostback implements JsonSerializable
         return [
             "url" => $this->url,
             "method" => $this->method,
-            "events" => $this->events
+            "events" => $this->events,
+            "type" => $this->type,
+            "creds" => $this->creds,
+            "eventName" => $this->eventName,
+            "actionSource" => $this->actionSource,
+            "testEventCode" => $this->testEventCode,
+            "matchLogic" => $this->matchLogic,
+            "pixelId" => $this->pixelId,
+            "accessToken" => $this->accessToken
         ];
     }
 

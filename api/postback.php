@@ -7,6 +7,7 @@ require_once __DIR__ . '/../paths.php';
 require_once __DIR__ . '/../requestfunc.php';
 require_once __DIR__ . '/../campaign.php';
 require_once __DIR__ . '/../currency.php';
+require_once __DIR__ . '/../fb_capi.php';
 global $db;
 
 $curLink = (is_https() ? 'https' : 'http') . '://' . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'];
@@ -84,12 +85,36 @@ function process_s2s_posbacks(array $s2s_postbacks, string $inner_status, array 
 {
     $clickid = (string)($click['clickid'] ?? '');
     $userid = (string)($click['userid'] ?? '');
+    global $db;
     $mp = new MacrosProcessor(null, $click, $clickid, $userid);
     foreach ($s2s_postbacks as $s2s) {
-        if (empty($s2s->url)) {
+        if (!s2s_should_fire($s2s->events, $s2s->matchLogic ?? 'or', $inner_status, $click, $db)) {
             continue;
         }
-        if (!in_array($inner_status, $s2s->events, true)) {
+
+        // Facebook Conversions API branch (see docs/fb-offline-conversions.md).
+        if (($s2s->type ?? 'url') === 'fb_offline') {
+            // creds may be a literal base64 blob or a macro like {c.fbcreds};
+            // resolve it through the existing MacrosProcessor either way.
+            $credsB64 = fb_resolve_creds($mp, $s2s->creds);
+            if ($credsB64 === '') {
+                add_log('postback', 'fb_offline: empty creds for clickid ' . $clickid . ', skipping.');
+                continue;
+            }
+            $fbEvent = $s2s->eventName !== '' ? $s2s->eventName : $inner_status;
+            FbOfflineConversion::send(
+                $credsB64,
+                $click,
+                $fbEvent,
+                (float)($click['payout'] ?? 0),
+                'USD',
+                $s2s->actionSource !== '' ? $s2s->actionSource : 'website',
+                $s2s->testEventCode !== '' ? $s2s->testEventCode : null
+            );
+            continue;
+        }
+
+        if (empty($s2s->url)) {
             continue;
         }
         $final_url = str_replace('{status}', $inner_status, $s2s->url);

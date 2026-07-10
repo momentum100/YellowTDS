@@ -733,6 +733,50 @@ class Db
         return $clicks[0] ?? [];
     }
 
+    /**
+     * Attribute an extension install to the original ad click by EXACT ip + EXACT
+     * ua, within a look-back window, scoped to one campaign. Used by
+     * api/match.php. Returns the MOST RECENT matching click (params/events decoded
+     * like get_click_by_clickid) plus the count of DISTINCT clickids that matched
+     * the window (>1 => ambiguous; caller still takes the most recent).
+     *
+     * NOTE on binding: exec_read_query()'s convention is an [$value => SQLITE3_TYPE]
+     * map whose KEYS are the bind VALUES, bound positionally in insertion order.
+     * The query's named placeholders are therefore filled left-to-right by param
+     * ORDER, not by name — so the array order below must match the WHERE order
+     * (campaign_id, ip, ua, since). (Edge case of that shared convention: if two
+     * bind values were identical they'd collapse to one array key; here the four
+     * values — a small int, an ip, a ua and a ~1.7e9 timestamp — never collide.)
+     *
+     * @return array{click:array,distinct_count:int}
+     */
+    public function find_click_by_ip_ua(string $ip, string $ua, int $sinceTs, int $campaignId): array
+    {
+        if ($ip === '' || $ua === '' || $campaignId <= 0) {
+            return ['click' => [], 'distinct_count' => 0];
+        }
+
+        $where = "campaign_id = :c AND ip = :ip AND ua = :ua AND time >= :since";
+        $binds = [
+            $campaignId => SQLITE3_INTEGER,
+            $ip => SQLITE3_TEXT,
+            $ua => SQLITE3_TEXT,
+            $sinceTs => SQLITE3_INTEGER,
+        ];
+
+        $rowQuery = "SELECT * FROM clicks WHERE $where ORDER BY time DESC LIMIT 1";
+        $click = $this->exec_read_query($rowQuery, $binds, true);
+        if (!empty($click)) {
+            self::decode_click_row($click);
+        }
+
+        $countQuery = "SELECT COUNT(DISTINCT clickid) AS cnt FROM clicks WHERE $where";
+        $countRow = $this->exec_read_query($countQuery, $binds, true);
+        $distinct = (int)($countRow['cnt'] ?? 0);
+
+        return ['click' => $click, 'distinct_count' => $distinct];
+    }
+
     private function get_stats_select_parts(array $selectedFields): array
     {
         $selectParts = [];
