@@ -15,6 +15,7 @@ $accessToken   = trim((string)($_POST['accessToken'] ?? ''));
 $testEventCode = trim((string)($_POST['testEventCode'] ?? ''));
 $eventName     = trim((string)($_POST['eventName'] ?? ''));
 $actionSource  = trim((string)($_POST['actionSource'] ?? ''));
+$proxy         = trim((string)($_POST['proxy'] ?? ''));
 
 if ($eventName === '') {
     $eventName = 'TestEvent';
@@ -44,7 +45,7 @@ $click = [
     'params'  => [],
 ];
 
-$res = FbOfflineConversion::send($creds, $click, $eventName, 1.0, 'USD', $actionSource, $testEventCode);
+$res = FbOfflineConversion::send($creds, $click, $eventName, 1.0, 'USD', $actionSource, $testEventCode, $proxy);
 
 $httpCode = (int)($res['http_code'] ?? 0);
 $body     = $res['body'] ?? '';

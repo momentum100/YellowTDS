@@ -109,7 +109,8 @@ function process_s2s_posbacks(array $s2s_postbacks, string $inner_status, array 
                 (float)($click['payout'] ?? 0),
                 'USD',
                 $s2s->actionSource !== '' ? $s2s->actionSource : 'website',
-                $s2s->testEventCode !== '' ? $s2s->testEventCode : null
+                $s2s->testEventCode !== '' ? $s2s->testEventCode : null,
+                (string)($s2s->proxy ?? '')
             );
             continue;
         }

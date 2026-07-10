@@ -643,6 +643,10 @@ class S2sPostback implements JsonSerializable
     // on the fly from these in fromArray(); `creds` stays the runtime source.
     public string $pixelId;
     public string $accessToken;
+    // Outbound proxy for the FB CAPI send. Facebook blocks direct datacenter IPs,
+    // so the send must go through a proxy. Full curl proxy string, e.g.
+    // socks5h://user:pass@host:port. Empty = direct (usually fails on prod).
+    public string $proxy;
 
     public function __construct(
         $url,
@@ -655,7 +659,8 @@ class S2sPostback implements JsonSerializable
         string $testEventCode = '',
         string $matchLogic = 'or',
         string $pixelId = '',
-        string $accessToken = ''
+        string $accessToken = '',
+        string $proxy = ''
     ) {
         $this->url = $url;
         $this->method = $method;
@@ -668,6 +673,7 @@ class S2sPostback implements JsonSerializable
         $this->matchLogic = $matchLogic;
         $this->pixelId = $pixelId;
         $this->accessToken = $accessToken;
+        $this->proxy = $proxy;
     }
 
     public static function fromArray($arr): S2sPostback
@@ -714,7 +720,8 @@ class S2sPostback implements JsonSerializable
             $arr['testEventCode'] ?? '',
             $arr['matchLogic'] ?? 'or',
             $pixelId,
-            $accessToken
+            $accessToken,
+            (string)($arr['proxy'] ?? '')
         );
     }
 
@@ -731,7 +738,8 @@ class S2sPostback implements JsonSerializable
             "testEventCode" => $this->testEventCode,
             "matchLogic" => $this->matchLogic,
             "pixelId" => $this->pixelId,
-            "accessToken" => $this->accessToken
+            "accessToken" => $this->accessToken,
+            "proxy" => $this->proxy
         ];
     }
 

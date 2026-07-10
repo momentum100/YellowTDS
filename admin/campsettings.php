@@ -1050,6 +1050,7 @@ global $c, $db, $campId;
                         $s2sMatchLogic = $s2sList[$i]->matchLogic ?: 'or';
                         $s2sPixelId = $s2sList[$i]->pixelId;
                         $s2sAccessToken = $s2sList[$i]->accessToken;
+                        $s2sProxy = $s2sList[$i]->proxy;
                         // Legacy prefill: if only a base64 creds blob was stored (not a macro),
                         // split it back into the two fields for display.
                         if ($s2sPixelId === '' && $s2sAccessToken === '' && $s2sCreds !== '' && strpos($s2sCreds, '{') === false) {
@@ -1140,6 +1141,20 @@ global $c, $db, $campId;
                                 <div class="col-lg-5 col-md-5 col-sm-5 col-xs-5">
                                     <div class="input-group">
                                         <input type="text" class="form-control" placeholder="EAAB...access token" value="<?= htmlspecialchars($s2sAccessToken, ENT_QUOTES) ?>" name="postback.s2s[<?= $i ?>][accessToken]" />
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-lg-3 col-md-3 col-sm-3 col-xs-3">
+                                    <label class="login2 pull-left pull-left-pro">
+                                        <i class="bi bi-info-circle admin-info-icon" title="Facebook blocks direct datacenter IPs, so the CAPI send goes through this proxy. Full curl proxy string, e.g. socks5h://user:pass@host:port. Leave empty for direct."></i>
+                                        FB send proxy (SOCKS5):
+                                    </label>
+                                    <br /><br />
+                                </div>
+                                <div class="col-lg-5 col-md-5 col-sm-5 col-xs-5">
+                                    <div class="input-group">
+                                        <input type="text" class="form-control" placeholder="socks5h://user:pass@host:port" value="<?= htmlspecialchars($s2sProxy, ENT_QUOTES) ?>" name="postback.s2s[<?= $i ?>][proxy]" />
                                     </div>
                                 </div>
                             </div>
@@ -1360,7 +1375,8 @@ global $c, $db, $campId;
                 accessToken: $row.find('input[name$="[accessToken]"]').val() || '',
                 testEventCode: $row.find('input[name$="[testEventCode]"]').val() || '',
                 eventName: $row.find('input[name$="[eventName]"]').val() || '',
-                actionSource: $row.find('input[name$="[actionSource]"]').val() || ''
+                actionSource: $row.find('input[name$="[actionSource]"]').val() || '',
+                proxy: $row.find('input[name$="[proxy]"]').val() || ''
             });
             $res.css('color', '').text('Sending…');
             fetch('fbtest.php', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body.toString() })

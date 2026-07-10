@@ -242,7 +242,8 @@ class FbOfflineConversion
         float $value,
         string $currency = 'USD',
         string $actionSource = 'website',
-        ?string $testEventCode = null
+        ?string $testEventCode = null,
+        string $proxy = ''
     ): array {
         $creds = self::decodeCreds($credsB64);
         if ($creds === null) {
@@ -266,15 +267,23 @@ class FbOfflineConversion
 
         // Dedicated clean curl — form-urlencoded body, no IP-spoof headers.
         $curl = curl_init();
-        curl_setopt_array($curl, [
+        $opts = [
             CURLOPT_URL => $url,
             CURLOPT_POST => true,
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT => 10,
+            CURLOPT_TIMEOUT => 30,
             CURLOPT_FOLLOWLOCATION => false,
             CURLOPT_HTTPHEADER => ['Content-Type: application/x-www-form-urlencoded'],
             CURLOPT_POSTFIELDS => http_build_query($fields),
-        ]);
+        ];
+        // Facebook blocks direct datacenter IPs — route through the configured
+        // proxy when set. The scheme in the string (e.g. socks5h://) is honored
+        // by libcurl; socks5h resolves DNS through the proxy.
+        $proxy = trim($proxy);
+        if ($proxy !== '') {
+            $opts[CURLOPT_PROXY] = $proxy;
+        }
+        curl_setopt_array($curl, $opts);
         $body = curl_exec($curl);
         $info = curl_getinfo($curl);
         $error = curl_error($curl);
@@ -516,7 +525,8 @@ function fire_fb_offline_for_click(array $click, string $eventName, float $value
                     $value,
                     'USD',
                     ($s2s->actionSource ?? '') !== '' ? $s2s->actionSource : 'website',
-                    ($s2s->testEventCode ?? '') !== '' ? $s2s->testEventCode : null
+                    ($s2s->testEventCode ?? '') !== '' ? $s2s->testEventCode : null,
+                    (string)($s2s->proxy ?? '')
                 );
                 $results[] = [
                     'event' => $fbEvent,
