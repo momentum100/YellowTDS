@@ -23,6 +23,7 @@ $cssPath = get_admin_base_url().'css';
     <!--Data tables-->
     <link rel="stylesheet" href="<?=$cssPath?>/tabulator_clo.css?v=<?=filemtime($cssFsPath.'/tabulator_clo.css') ?>" >
     <link rel="stylesheet" href="<?=$cssPath?>/tabulator_midnight.css?v=<?=filemtime($cssFsPath.'/tabulator_midnight.css') ?>" >
+    <link rel="stylesheet" href="<?=$cssPath?>/clicks.css?v=<?=filemtime($cssFsPath.'/clicks.css') ?>" >
 
     <!--JQuery Modal-->
     <link rel="stylesheet" href="<?=$cssPath?>/jquery.modal.min.css">

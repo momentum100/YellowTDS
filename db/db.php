@@ -590,7 +590,7 @@ class Db
         }
     }
 
-    public function get_clicks_paginated(string $filter, int $startdate, int $enddate, ?int $campId, int $page, int $size, string $sortField = 'time', string $sortDir = 'desc', array $filters = [], array $paramColumns = [], string $searchTerm = ''): array
+    public function get_clicks_paginated(string $filter, int $startdate, int $enddate, ?int $campId, int $page, int $size, string $sortField = 'time', string $sortDir = 'desc', array $filters = [], array $paramColumns = [], string $searchTerm = '', array $paramFilters = []): array
     {
         $allowedSort = ['id','time','ip','country','lang','os','osver','client','clientver','device','brand','model','isp','ua','userid','clickid','flow','path','step','status','payout','reason'];
         // Support sorting by param.* fields via json_extract
@@ -629,9 +629,9 @@ class Db
                 break;
         }
         $tableFilterFields = match ($table) {
-            'blocked' => ['country', 'lang', 'os', 'osver', 'brand', 'model', 'device', 'isp', 'client', 'clientver', 'reason'],
-            'trafficback' => ['country', 'lang', 'os', 'osver', 'brand', 'model', 'device', 'isp', 'client', 'clientver'],
-            default => ['country', 'lang', 'os', 'osver', 'brand', 'model', 'device', 'isp', 'client', 'clientver', 'flow', 'step', 'path', 'status'],
+            'blocked' => ['ip', 'country', 'lang', 'os', 'osver', 'brand', 'model', 'device', 'isp', 'client', 'clientver', 'ua', 'reason'],
+            'trafficback' => ['ip', 'country', 'lang', 'os', 'osver', 'brand', 'model', 'device', 'isp', 'client', 'clientver', 'ua'],
+            default => ['ip', 'userid', 'clickid', 'country', 'lang', 'os', 'osver', 'brand', 'model', 'device', 'isp', 'client', 'clientver', 'ua', 'flow', 'step', 'path', 'status'],
         };
 
         // Build filter WHERE clauses (positional ? placeholders)
@@ -690,19 +690,38 @@ class Db
 
         $searchTerm = trim($searchTerm);
         $searchWhere = '';
-        if ($searchTerm !== '' && in_array($filter, ['allowed', 'leads'], true)) {
+        if ($searchTerm !== '') {
             $escapedSearch = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $searchTerm);
             $likePattern = '%' . $escapedSearch . '%';
-            $searchWhere = " AND (userid LIKE ? ESCAPE '\\' OR clickid LIKE ? ESCAPE '\\')";
-            $bindList[] = [$likePattern, SQLITE3_TEXT];
-            $bindList[] = [$likePattern, SQLITE3_TEXT];
+            $searchFields = $table === 'clicks'
+                ? ['userid', 'clickid', 'ip', 'params']
+                : ['ip', 'params'];
+            $searchParts = [];
+            foreach ($searchFields as $searchField) {
+                $searchParts[] = "$searchField LIKE ? ESCAPE '\\'";
+                $bindList[] = [$likePattern, SQLITE3_TEXT];
+            }
+            $searchWhere = ' AND (' . implode(' OR ', $searchParts) . ')';
         }
 
-        $countQuery = "SELECT COUNT(*) as total FROM $table WHERE $where$filterWhere$searchWhere";
+        $paramFilterWhere = '';
+        $paramFilterParts = [];
+        foreach ($paramFilters as $key => $value) {
+            if (!preg_match('/^[a-zA-Z0-9_]+$/', (string)$key) || $value === '') {
+                continue;
+            }
+            $paramFilterParts[] = "json_extract(params, '\$.{$key}') = ?";
+            $bindList[] = [(string)$value, SQLITE3_TEXT];
+        }
+        if (!empty($paramFilterParts)) {
+            $paramFilterWhere = ' AND ' . implode(' AND ', $paramFilterParts);
+        }
+
+        $countQuery = "SELECT COUNT(*) as total FROM $table WHERE $where$filterWhere$searchWhere$paramFilterWhere";
         $countResult = $this->exec_bind_list_query($countQuery, $bindList, true);
         $total = (int)($countResult['total'] ?? 0);
 
-        $dataQuery = "SELECT * FROM $table WHERE $where$filterWhere$searchWhere ORDER BY $sortExpr COLLATE NOCASE $sortDir LIMIT $size OFFSET $offset";
+        $dataQuery = "SELECT * FROM $table WHERE $where$filterWhere$searchWhere$paramFilterWhere ORDER BY $sortExpr COLLATE NOCASE $sortDir LIMIT $size OFFSET $offset";
         $clicks = $this->exec_bind_list_query($dataQuery, $bindList);
         foreach ($clicks as &$click) {
             self::decode_click_row($click);

@@ -44,9 +44,7 @@ document.addEventListener('DOMContentLoaded', function() {
         <div class="camp-menu-item btn-rename"><i class="bi bi-pencil-fill"></i> Rename</div>
         <div class="camp-menu-item btn-clone"><i class="bi bi-copy"></i> Clone</div>
         <div class="camp-menu-item btn-stats"><i class="bi bi-bar-chart-fill"></i> Statistics</div>
-        <div class="camp-menu-item btn-allowed"><i class="bi bi-person-circle"></i> Allowed</div>
-        <div class="camp-menu-item btn-blocked"><i class="bi bi-ban"></i> Blocked</div>
-        <div class="camp-menu-item btn-leads"><i class="bi bi-coin"></i> Leads</div>
+        <div class="camp-menu-item btn-clicks"><i class="bi bi-cursor-fill"></i> Clicks</div>
         <div class="camp-menu-divider"></div>
         <div class="camp-menu-item btn-delete camp-menu-danger"><i class="bi bi-trash-fill"></i> Delete</div>
     `;
@@ -108,18 +106,8 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        if (menuItem.classList.contains('btn-allowed')) {
+        if (menuItem.classList.contains('btn-clicks')) {
             window.location.href = `clicks.php?campId=${campaignId}&view=allowed${startDateEndDateParams}`;
-            return;
-        }
-
-        if (menuItem.classList.contains('btn-blocked')) {
-            window.location.href = `clicks.php?campId=${campaignId}&view=blocked${startDateEndDateParams}`;
-            return;
-        }
-
-        if (menuItem.classList.contains('btn-leads')) {
-            window.location.href = `clicks.php?campId=${campaignId}&view=leads${startDateEndDateParams}`;
             return;
         }
     });

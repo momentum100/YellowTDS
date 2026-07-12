@@ -1,5 +1,6 @@
 // Common functions for sortable lists
 function formatColumnName(field) {
+    if (field === 'params') return 'Subs (all URL parameters)';
     return field.charAt(0).toUpperCase() + field.slice(1).replace(/_/g, ' ');
 }
 
@@ -41,7 +42,7 @@ function createSortableItem(field, title, isChecked) {
     `;
 }
 
-function createParamItemElement(containerId, paramName) {
+function createParamItemElement(containerId, paramName, isChecked = true) {
     const field = 'param.' + paramName;
     const container = document.getElementById(containerId);
 
@@ -53,13 +54,19 @@ function createParamItemElement(containerId, paramName) {
     div.dataset.field = field;
     div.innerHTML = `
         <span class="drag-handle">☰</span>
-        <input type="checkbox" checked onchange="handleParamCheckboxChange(this)">
+        <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="handleParamCheckboxChange(this)">
         <span>${paramName}\u{1F310}</span>
     `;
     return div;
 }
 
 function addParamItem(containerId, paramName) {
+    const existing = document.querySelector(`#${containerId} [data-field="param.${paramName}"]`);
+    if (existing) {
+        existing.querySelector('input').checked = true;
+        handleCheckboxChange();
+        return existing;
+    }
     const div = createParamItemElement(containerId, paramName);
     if (!div) return null;
     document.getElementById(containerId).prepend(div);
@@ -67,9 +74,6 @@ function addParamItem(containerId, paramName) {
 }
 
 function handleParamCheckboxChange(cb) {
-    if (!cb.checked) {
-        cb.closest('.param-item').remove();
-    }
     handleCheckboxChange(cb);
 }
 
@@ -87,7 +91,6 @@ function setupSelectButtons(selectAllId, deselectAllId, containerId) {
     });
 
     $(`#${deselectAllId}`).click(() => {
-        $(`#${containerId} .param-item`).remove();
         $(`#${containerId} input[type="checkbox"]`).prop('checked', false);
         updateSaveButtonState();
     });
@@ -111,7 +114,11 @@ function handleCheckboxChange() {
 
 // ── Shared filter constants & functions ──
 
-const FILTER_FIELDS = ['country','lang','os','osver','brand','model','device','isp','client','clientver','flow','step','path','status','param'];
+const FILTER_FIELDS = [
+    'ip','userid','clickid','country','lang','device','brand','model','os','osver',
+    'client','clientver','isp','ua','flow','step','path','status',
+    'param.utm_source','param.utm_medium','param.utm_campaign','param.utm_content','param.utm_term','param'
+];
 let _extraFilterFields = [];
 const FILTER_OPERATORS = [
     { value: '=', label: '=' },
@@ -148,13 +155,14 @@ function handleAddFilterClick(e) {
 
 function addFilterRowToDOM(field, operator, value) {
     // Detect if this is a param.* field being restored
-    const isParam = field.startsWith('param.');
+    const isPresetParam = FILTER_FIELDS.includes(field) && field.startsWith('param.');
+    const isParam = field.startsWith('param.') && !isPresetParam;
     const paramKey = isParam ? field.substring(6) : '';
     const selectedField = isParam ? 'param' : field;
 
     const allFields = [...FILTER_FIELDS.slice(0, -1), ..._extraFilterFields, 'param'];
     const fieldOptions = allFields
-        .map(f => `<option value="${f}"${f === selectedField ? ' selected' : ''}>${f}</option>`)
+        .map(f => `<option value="${f}"${f === selectedField ? ' selected' : ''}>${f.replace('param.', '')}</option>`)
         .join('');
 
     const opOptions = FILTER_OPERATORS

@@ -26,6 +26,16 @@ function addColumnsToList(selectedClmns, availableClmns, existingFilters, filter
             $list.append(createSortableItem(columnField, formatColumnName(columnField), false));
         }
     });
+
+    // Show observed/common URL parameters as independent optional columns.
+    const availableParams = options?.availableParams || [];
+    availableParams.forEach(paramName => {
+        const field = 'param.' + paramName;
+        if (!selectedFields.includes(field)) {
+            const div = createParamItemElement('columnsList', paramName, false);
+            if (div) $list.append(div);
+        }
+    });
     
     // Destroy existing Sortable instance if it exists
     if (columnsSortable) {
@@ -46,10 +56,6 @@ function addColumnsToList(selectedClmns, availableClmns, existingFilters, filter
     // + Param button (event delegation for jquery-modal compatibility)
     document.removeEventListener('click', handleAddParamColumn);
     document.addEventListener('click', handleAddParamColumn);
-
-    // Initialize filters (pass extra fields like 'reason' for blocked clicks)
-    const extraFields = filterType === 'blocked' ? ['reason'] : [];
-    initializeFilters(existingFilters || {}, extraFields);
 
     // Initial button state
     updateSaveButtonState();
@@ -84,7 +90,7 @@ function setSaveButtonHandler(handlerUrl) {
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ columns: selectedColumns, filters: collectFilters() })
+                body: JSON.stringify({ columns: selectedColumns })
             });
 
             if (!response.ok) {

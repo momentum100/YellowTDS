@@ -36,6 +36,12 @@ $size = max(1, min(5000, (int)($_GET['size'] ?? 500)));
 $sortField = $_GET['sort'] ?? 'time';
 $sortDir = $_GET['dir'] ?? 'desc';
 $searchTerm = trim((string)($_GET['search'] ?? ''));
+$utmKeys = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'];
+$utmFilters = [];
+foreach ($utmKeys as $utmKey) {
+    $value = trim((string)($_GET[$utmKey] ?? ''));
+    if ($value !== '') $utmFilters[$utmKey] = $value;
+}
 
 // Read filters and columns from saved settings
 $filters = [];
@@ -61,7 +67,7 @@ foreach ($tableColumns as $col) {
     }
 }
 
-$result = $db->get_clicks_paginated($view, $startDate, $endDate, $campId, $page, $size, $sortField, $sortDir, $filters, $paramColumns, $searchTerm);
+$result = $db->get_clicks_paginated($view, $startDate, $endDate, $campId, $page, $size, $sortField, $sortDir, $filters, $paramColumns, $searchTerm, $utmFilters);
 
 header('Content-Type: application/json');
 echo json_encode($result);

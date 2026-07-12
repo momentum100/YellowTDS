@@ -59,11 +59,20 @@ if ($view === 'trafficback') {
 }
 $hasActiveFilters = !empty($savedFilters) && !empty($savedFilters['rules']);
 $searchTerm = trim((string)($_GET['search'] ?? ''));
-$showIdSearch = in_array($view, ['allowed', 'leads'], true);
+$showSearch = true;
+$utmKeys = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'];
+$utmFilters = [];
+foreach ($utmKeys as $utmKey) {
+    $utmFilters[$utmKey] = trim((string)($_GET[$utmKey] ?? ''));
+}
+$hasUtmFilters = count(array_filter($utmFilters, fn($value) => $value !== '')) > 0;
 
 $ajaxParams = ['view' => $view];
 if ($campId !== null) $ajaxParams['campId'] = $campId;
-if ($showIdSearch && $searchTerm !== '') $ajaxParams['search'] = $searchTerm;
+if ($searchTerm !== '') $ajaxParams['search'] = $searchTerm;
+foreach ($utmFilters as $utmKey => $utmValue) {
+    if ($utmValue !== '') $ajaxParams[$utmKey] = $utmValue;
+}
 if (isset($_GET['startdate'])) $ajaxParams['startdate'] = $_GET['startdate'];
 if (isset($_GET['enddate'])) $ajaxParams['enddate'] = $_GET['enddate'];
 $ajaxUrl = 'clicksdata.php?' . http_build_query($ajaxParams);
@@ -87,7 +96,7 @@ $ajaxUrl = 'clicksdata.php?' . http_build_query($ajaxParams);
                     </select>
                 </span>
             <?php endif; ?>
-            <?php if ($showIdSearch): ?>
+            <?php if ($showSearch): ?>
                 <form id="idSearchForm" method="get" action="clicks.php" style="display:inline-flex; align-items:flex-end; gap:8px; margin-left: 8px;">
                     <?php if ($campId !== null): ?>
                         <input type="hidden" name="campId" value="<?= (int)$campId ?>">
@@ -107,13 +116,16 @@ $ajaxUrl = 'clicksdata.php?' . http_build_query($ajaxParams);
                             type="text"
                             class="form-control"
                             value="<?= htmlspecialchars($searchTerm, ENT_QUOTES) ?>"
-                            placeholder="User ID / Click ID"
-                            style="width: 240px;">
+                            placeholder="IP / Click ID / URL parameter"
+                            style="width: 290px;">
                     </span>
                 </form>
             <?php endif; ?>
             </div>
             <div>
+                <button id="clickFiltersOpen" type="button" class="btn <?=$hasActiveFilters ? 'btn-primary' : 'btn-info'?>">
+                    <i class="bi bi-funnel-fill"></i> Filters<?=$hasActiveFilters ? ' · ' . count($savedFilters['rules']) : ''?>
+                </button>
                 <button id="resetFilters" title="Reset all filters" class="btn btn-outline-danger" style="margin-left: 8px;<?= $hasActiveFilters ? '' : ' display:none;' ?>"><i
                         class="bi bi-funnel"></i> Reset Filters</button>
                 <button id="columnsSelect" title="Select and order columns" class="btn btn-info" style="margin-left: 8px;"><i
@@ -129,9 +141,6 @@ $ajaxUrl = 'clicksdata.php?' . http_build_query($ajaxParams);
             $('#viewSelector').change(function() {
                 let newUrl = new URL(window.location.href);
                 newUrl.searchParams.set('view', $(this).val());
-                if (!['allowed', 'leads'].includes($(this).val())) {
-                    newUrl.searchParams.delete('search');
-                }
                 window.location.href = newUrl.href;
             });
 
@@ -155,7 +164,7 @@ $ajaxUrl = 'clicksdata.php?' . http_build_query($ajaxParams);
                     }, 500);
                 });
             }
-            
+
             $('#resetFilters').click(async function() {
                 try {
                     await fetch("clmnseditor.php?action=savecolumns&table=<?=$view?><?=is_null($campId)?'':'&campid='.$campId?>", {
@@ -176,7 +185,7 @@ $ajaxUrl = 'clicksdata.php?' . http_build_query($ajaxParams);
                 pagination: true,
                 paginationMode: "remote",
                 sortMode: "remote",
-                paginationSize: 500,
+                paginationSize: 100,
                 paginationSizeSelector: [25, 50, 100, 200, 500, 1000, 2000, 5000],
                 paginationCounter: "rows",
                 ajaxURL: "<?=$ajaxUrl?>",
@@ -198,6 +207,13 @@ $ajaxUrl = 'clicksdata.php?' . http_build_query($ajaxParams);
                 }
             });
 
+            <?php if (in_array($view, ['allowed', 'leads'], true)): ?>
+            t<?=$tName?>Table.on("rowClick", function (event, row) {
+                const clickId = row.getData().clickid;
+                if (clickId) openClickDetail(clickId);
+            });
+            <?php endif; ?>
+
             t<?=$tName?>Table.on("columnResized", async function (column) {
                 let updatedColumn = { field: column.getField(), width: column.getWidth() };
                 await fetch("clmnseditor.php?action=width&table=<?=$view?><?=is_null($campId)?'':'&campid='.$campId?>", {
@@ -209,7 +225,101 @@ $ajaxUrl = 'clicksdata.php?' . http_build_query($ajaxParams);
                 });
             });
         </script>
+        <div id="clickDetailBackdrop" class="click-detail-backdrop" aria-hidden="true">
+            <aside class="click-detail-panel" role="dialog" aria-modal="true" aria-labelledby="clickDetailTitle">
+                <div class="click-detail-header">
+                    <div>
+                        <h2 id="clickDetailTitle">Click details</h2>
+                        <div id="clickDetailId" class="click-detail-id"></div>
+                    </div>
+                    <button id="clickDetailClose" class="click-detail-close" type="button" aria-label="Close">&times;</button>
+                </div>
+                <div id="clickDetailContent"></div>
+            </aside>
+        </div>
+        <script>
+        (() => {
+            const backdrop = document.getElementById('clickDetailBackdrop');
+            const content = document.getElementById('clickDetailContent');
+            const clickIdLabel = document.getElementById('clickDetailId');
+            const closeButton = document.getElementById('clickDetailClose');
+            const groups = [
+                ['Overview', ['id', 'campaign_id', 'userid', 'time', 'ip', 'country', 'lang']],
+                ['Device & network', ['device', 'brand', 'model', 'os', 'osver', 'client', 'clientver', 'isp', 'ua']],
+                ['Journey', ['flow', 'path', 'step']],
+                ['Attribution parameters', ['params']],
+                ['Events', ['events']],
+                ['Conversion', ['status', 'cost', 'payout', 'leaddata']],
+            ];
+
+            function formatValue(key, value) {
+                if (key === 'time' && Number.isFinite(Number(value))) {
+                    return luxon.DateTime.fromSeconds(Number(value)).setZone(<?=json_encode($tz)?>).toFormat('yyyy-LL-dd HH:mm:ss ZZZZ');
+                }
+                if (key === 'leaddata' && typeof value === 'string' && value.trim().startsWith('{')) {
+                    try { value = JSON.parse(value); } catch (_) {}
+                }
+                if (value && typeof value === 'object') return JSON.stringify(value, null, 2);
+                if (value === null || value === undefined || value === '') return '—';
+                return String(value);
+            }
+
+            function renderSection(title, fields, click) {
+                const section = document.createElement('section');
+                section.className = 'click-detail-section';
+                const heading = document.createElement('h3');
+                heading.textContent = title;
+                const grid = document.createElement('div');
+                grid.className = 'click-detail-grid';
+                fields.forEach(key => {
+                    const label = document.createElement('div');
+                    label.className = 'click-detail-key';
+                    label.textContent = key;
+                    const value = document.createElement('div');
+                    value.className = 'click-detail-value';
+                    const formatted = formatValue(key, click[key]);
+                    value.textContent = formatted;
+                    if (formatted === '—') value.classList.add('click-detail-empty');
+                    grid.append(label, value);
+                });
+                section.append(heading, grid);
+                return section;
+            }
+
+            function closeClickDetail() {
+                backdrop.classList.remove('is-open');
+                backdrop.setAttribute('aria-hidden', 'true');
+            }
+
+            window.openClickDetail = async function (clickId) {
+                clickIdLabel.textContent = clickId;
+                content.textContent = 'Loading…';
+                backdrop.classList.add('is-open');
+                backdrop.setAttribute('aria-hidden', 'false');
+                closeButton.focus();
+                try {
+                    const response = await fetch('clickdetail.php?clickid=' + encodeURIComponent(clickId));
+                    const payload = await response.json();
+                    if (!response.ok) throw new Error(payload.error || 'Unable to load click');
+                    content.replaceChildren(...groups.map(group => renderSection(group[0], group[1], payload.click)));
+                } catch (error) {
+                    content.textContent = '';
+                    notify(error.message, 'error');
+                    closeClickDetail();
+                }
+            };
+
+            closeButton.addEventListener('click', closeClickDetail);
+            backdrop.addEventListener('click', event => {
+                if (event.target === backdrop) closeClickDetail();
+            });
+            document.addEventListener('keydown', event => {
+                if (event.key === 'Escape' && backdrop.classList.contains('is-open')) closeClickDetail();
+            });
+        })();
+        </script>
         <?php include __DIR__."/clmnspopup.html" ?>
+        <?php include __DIR__."/clickfilters.html" ?>
         <script>
         document.addEventListener("DOMContentLoaded", function () {
             document.getElementById("downloadCsv").onclick = () => {
@@ -220,7 +330,10 @@ $ajaxUrl = 'clicksdata.php?' . http_build_query($ajaxParams);
                 let availableClmns = <?= json_encode(AvailableColumns::get_columns_for_type($view)) ?>;
                 let selectedClmns = <?= json_encode($tableColumns) ?>;
                 let existingFilters = <?= json_encode($savedFilters) ?>;
-                addColumnsToList(selectedClmns, availableClmns, existingFilters, '<?= $view ?>');
+                const commonParams = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'fbclid'];
+                const observedParams = t<?=$tName?>Table.getData().flatMap(row => Object.keys(row.params || {}));
+                const availableParams = [...new Set([...commonParams, ...observedParams])].sort();
+                addColumnsToList(selectedClmns, availableClmns, existingFilters, '<?= $view ?>', {availableParams});
                 setSaveButtonHandler("clmnseditor.php?action=savecolumns&table=<?= $view ?><?= is_null($campId) ? '' : '&campid=' . $campId ?>");
                 $('#columnModal').modal({
                     modalClass: 'ywbmodal',
@@ -229,6 +342,33 @@ $ajaxUrl = 'clicksdata.php?' . http_build_query($ajaxParams);
                     showClose: false
                 });
             }
+
+            const filtersSaveUrl = "clmnseditor.php?action=savefilters&table=<?=$view?><?=is_null($campId)?'':'&campid='.$campId?>";
+            const saveClickFilters = async (filters) => {
+                const response = await fetch(filtersSaveUrl, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({filters})
+                });
+                const data = await response.json();
+                if (!response.ok || data.error) throw new Error(data.result || 'Unable to save filters');
+                window.location.reload();
+            };
+
+            document.getElementById('clickFiltersOpen').onclick = () => {
+                initializeFilters(<?=json_encode($savedFilters)?>, <?=$view === 'blocked' ? "['reason']" : '[]'?>);
+                if (!document.querySelector('#filterRows .filter-row')) addFilterRowToDOM('', '=', '');
+                $('#clickFiltersModal').modal({modalClass: 'ywbmodal', fadeDuration: 0, showClose: false});
+            };
+            document.getElementById('closeClickFilters').onclick = () => $.modal.close();
+            document.getElementById('saveClickFilters').onclick = async () => {
+                try { await saveClickFilters(collectFilters()); }
+                catch (error) { notify(error.message, 'error'); }
+            };
+            document.getElementById('clearClickFilters').onclick = async () => {
+                try { await saveClickFilters({}); }
+                catch (error) { notify(error.message, 'error'); }
+            };
         });
         </script>
         <br/>
