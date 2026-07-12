@@ -6,6 +6,18 @@
 
 .logo-link {
     flex-shrink: 0;
+    display: block;
+    width: 320px;
+    height: 92px;
+    overflow: hidden;
+}
+
+.main-logo {
+    display: block;
+    width: 320px;
+    max-width: none;
+    height: auto;
+    transform: translateY(-7px);
 }
 
 .geo-version {
