@@ -119,8 +119,18 @@ function mergeSettingsRecursive($current, $incoming) {
         return $incoming;
     }
 
-    if (!is_array($current) || array_is_list($incoming)) {
+    // A list on the incoming side replaces wholesale (normalized).
+    if (array_is_list($incoming)) {
         return compactListRecursive($incoming);
+    }
+
+    // Incoming is an associative array: deep-merge by key, preserving keys.
+    // If the current value can't hold string keys (null / scalar / list, e.g.
+    // a brand-new key or previously corrupted shape), start from an empty
+    // associative base so incoming's keys survive instead of being flattened
+    // into a positional list by compactListRecursive.
+    if (!is_array($current) || array_is_list($current)) {
+        $current = [];
     }
 
     foreach ($incoming as $key => $value) {
