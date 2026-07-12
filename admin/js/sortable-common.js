@@ -116,7 +116,7 @@ function handleCheckboxChange() {
 
 const FILTER_FIELDS = [
     'ip','userid','clickid','country','lang','device','brand','model','os','osver',
-    'client','clientver','isp','ua','flow','step','path','status',
+    'client','clientver','isp','ua','flow','step','path','status','reason',
     'param.utm_source','param.utm_medium','param.utm_campaign','param.utm_content','param.utm_term','param'
 ];
 let _extraFilterFields = [];

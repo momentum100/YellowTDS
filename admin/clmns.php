@@ -41,7 +41,8 @@ class AvailableColumns
         "step",
         "status",
         "cost",
-        "payout"
+        "payout",
+        "reason"
     ];
 
     static $leadsColumns = [
@@ -67,7 +68,8 @@ class AvailableColumns
         "status",
         "payout",
         "name",
-        "phone"
+        "phone",
+        "reason"
     ];
     static $trafficbackColumns = [
         "ip",
