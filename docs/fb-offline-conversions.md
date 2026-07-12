@@ -24,13 +24,13 @@ fired from two places:
 ## Flow: click -> install -> conversion -> Facebook
 
 ```
-Ad click (carries fbclid, optionally fbcreds) 
+Ad click (carries fbclid, optionally fbcreds)
    -> TDS records a `clicks` row: time, ip, ua, clickid, campaign_id, params(JSON)
         params contains fbclid (and optionally the base64 creds blob)
    -> User installs the extension  -> POST /api/events.php (event=install)
         -> add_click_event(...)   -> fire fb_offline postbacks matching "install"
    -> Network fires conversion     -> POST /api/postback.php (status=..., payout=...)
-        -> update_status(...)      -> process_s2s_posbacks(...) 
+        -> update_status(...)      -> process_s2s_posbacks(...)
              -> fb_offline branch  -> FbOfflineConversion::send(...)
                   -> POST graph.facebook.com/v21.0/{pixel_id}/events
 ```
