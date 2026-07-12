@@ -91,6 +91,10 @@
     line-height: 1.3;
 }
 
+#campaign-slug-error.is-dirty {
+    color: #f7c65f;
+}
+
 #campaign-url-aliases {
     margin-top: 4px;
 }

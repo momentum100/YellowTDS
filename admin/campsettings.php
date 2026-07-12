@@ -32,9 +32,10 @@ $campaignPublicUrl = $campaignUrlBase . rawurlencode($c->publicId) . '/';
                 <div class="campaign-url-editor" data-base-url="<?= htmlspecialchars($campaignUrlBase) ?>" data-aliases="<?= htmlspecialchars(json_encode($c->publicIdAliases), ENT_QUOTES) ?>">
                     <label for="campaign-public-slug">Campaign link</label>
                     <input id="campaign-public-url" type="text" readonly value="<?= htmlspecialchars($campaignPublicUrl) ?>" title="<?= htmlspecialchars($campaignPublicUrl) ?>">
-                    <label for="campaign-public-slug" class="campaign-slug-label">URL slug <i class="bi bi-question-circle admin-info-icon" title="Saved only when you click Save settings. When the slug changes, every previous slug is kept as a working alias, so existing campaign links continue routing traffic. Aliases are never removed automatically."></i></label>
+                    <label for="campaign-public-slug" class="campaign-slug-label">URL slug <i class="bi bi-question-circle admin-info-icon" title="Saved when you click Save here or Save settings. When the slug changes, every previous slug is kept as a working alias, so existing campaign links continue routing traffic. Aliases are never removed automatically."></i></label>
                     <input id="campaign-public-slug" type="text" value="<?= htmlspecialchars($c->publicId) ?>" maxlength="63" spellcheck="false" autocomplete="off">
                     <div class="campaign-url-actions">
+                        <button id="save-campaign-slug" type="button" class="btn btn-success btn-sm" disabled><i class="bi bi-check-lg"></i> Save</button>
                         <button id="copy-campaign-url" type="button" class="btn btn-outline-secondary btn-sm"><i class="bi bi-clipboard"></i> Copy</button>
                         <a id="open-campaign-url" class="btn btn-primary btn-sm" href="<?= htmlspecialchars($campaignPublicUrl) ?>" target="_blank" rel="noopener"><i class="bi bi-box-arrow-up-right"></i> Open</a>
                     </div>
