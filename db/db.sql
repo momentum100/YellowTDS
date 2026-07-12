@@ -26,6 +26,8 @@ CREATE TABLE IF NOT EXISTS clicks (
 	userid TEXT NOT NULL,
 	clickid TEXT NOT NULL,
 	flow TEXT,
+	flow_id TEXT DEFAULT NULL,
+	reason TEXT DEFAULT NULL,
 	path TEXT DEFAULT '[]',
 	step INTEGER DEFAULT 0,
 	events TEXT DEFAULT '{}',
@@ -57,6 +59,8 @@ CREATE TABLE IF NOT EXISTS click_event_log (
 );
 CREATE INDEX IF NOT EXISTS idx_event_clickid_time ON click_event_log (clickid,time);
 CREATE INDEX IF NOT EXISTS idx_event_name_time ON click_event_log (event_name,time);
+
+PRAGMA user_version = 3;
 
 CREATE INDEX IF NOT EXISTS idx_country ON clicks (country);
 CREATE INDEX IF NOT EXISTS idx_lang ON clicks (lang);

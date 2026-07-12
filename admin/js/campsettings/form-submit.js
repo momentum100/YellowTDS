@@ -115,7 +115,7 @@ document.getElementById("campsettings")?.addEventListener("submit", async (e) =>
     const urlParams = new URLSearchParams(window.location.search);
     const campId = urlParams.get('campId');
     if (campId === null) {
-        alert("No campaign ID found!");
+        notify("No campaign ID found!", 'error');
         return false;
     }
 
@@ -167,8 +167,15 @@ document.getElementById("campsettings")?.addEventListener("submit", async (e) =>
         });
         let js = await res.json();
         if (js.error) {
-            showToast("Error!", true);
+            showToast(js.result || "Error!", true);
+            notify(js.result || "Could not save settings.", 'error');
         } else {
+            if (Array.isArray(js.flows) && typeof window.reconcileSavedFlows === 'function') {
+                window.reconcileSavedFlows(js.flows);
+            }
+            if (typeof window.reconcileCampaignRoute === 'function') {
+                window.reconcileCampaignRoute(js.publicid, js.publicidaliases || []);
+            }
             showToast("Settings Saved", false);
         }
     } catch (err) {

@@ -21,7 +21,7 @@ function collectStepData(stepSec) {
                 if (modeBtn) folderloadtypes[folder] = modeBtn.dataset.mode || 'base';
             }
         });
-    } else {
+    } else if (action === 'redirect') {
         stepSec.querySelectorAll('.flow-step-redirect').forEach(function (inp) {
             if (inp.value.trim()) {
                 var url = inp.value.trim();
@@ -33,7 +33,7 @@ function collectStepData(stepSec) {
             }
         });
         var rtSel = stepSec.querySelector('select.flow-step-redirect-type');
-        if (rtSel) redirectType = parseInt(rtSel.value);
+        if (rtSel) redirectType = ['meta', 'js'].includes(rtSel.value) ? rtSel.value : parseInt(rtSel.value);
     }
 
     return {
@@ -76,6 +76,11 @@ export function collectFlowsData() {
         if (!sec) return;
 
         var name = row.querySelector('.flow-name-label').value || 'Flow';
+        var id = row.dataset.streamId || '';
+        var typeSelect = row.querySelector('.flow-type');
+        var type = typeSelect ? typeSelect.value : 'regular';
+        var enabledInput = row.querySelector('.flow-enabled');
+        var enabled = type === 'default' ? true : (!enabledInput || enabledInput.checked);
 
         // Flow filters from QueryBuilder
         var fb = $('#flow-filters-' + fi);
@@ -91,8 +96,11 @@ export function collectFlowsData() {
         });
 
         flows.push({
+            id: id,
             name: name,
-            filters: filters,
+            type: type,
+            enabled: enabled,
+            filters: type === 'default' ? {} : filters,
             distribution: dist.distribution,
             optimize_for: dist.optimize_for,
             optimize_mode: dist.optimize_mode,

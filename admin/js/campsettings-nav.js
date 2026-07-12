@@ -13,8 +13,10 @@ window.showSection = showSection;
 document.querySelector('.camp-sidebar').addEventListener('click', function (e) {
     var link = e.target.closest('a');
     if (!link) return;
+    var href = link.getAttribute('href') || '';
+    if (!href.startsWith('#')) return;
     e.preventDefault();
-    var targetId = link.getAttribute('href').substring(1);
+    var targetId = href.substring(1);
     showSection(targetId);
     history.replaceState(null, '', '#' + targetId);
 });

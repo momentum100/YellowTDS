@@ -75,6 +75,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             left: 100%;
         }
     </style>
+    <script src="js/toast.js"></script>
     <script>
         let lockoutActive = false;
         let lockoutTimer = null;
@@ -204,10 +205,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     } else if (data.locked) {
                         startLockout(data.retry_after);
                     } else {
-                        alert('Wrong password!');
+                        notify('Wrong password!', 'error');
                     }
                 } catch (error) {
-                    alert('Error occurred during login');
+                    notify('Error occurred during login', 'error');
                 }
                 if (!lockoutActive) {
                     submitButton.disabled = false;

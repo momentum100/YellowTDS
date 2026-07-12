@@ -37,15 +37,15 @@ document.querySelector('.white-add-existing')?.addEventListener('click', functio
     btn.disabled = true;
     fetch('listfolders.php?type=white').then(function (r) { return r.json(); }).then(function (data) {
         btn.disabled = false;
-        if (data.error) { alert(data.result); return; }
-        if (!data.folders.length) { alert('No white page folders found. Upload a ZIP first.'); return; }
+        if (data.error) { notify(data.result, 'error'); return; }
+        if (!data.folders.length) { notify('No white page folders found. Upload a ZIP first.', 'error'); return; }
         if (window.openFolderPicker) {
             window.openFolderPicker(data.folders).then(function (choice) {
                 if (!choice) return;
                 document.getElementById('white_folder_container').insertAdjacentHTML('beforeend', buildWhiteFolderRow(choice));
             });
         }
-    }).catch(function (err) { btn.disabled = false; alert('Error: ' + err); });
+    }).catch(function (err) { btn.disabled = false; notify('Error: ' + err, 'error'); });
 });
 
 // Upload ZIP for white folder
@@ -57,14 +57,14 @@ document.querySelector('.white-upload-zip')?.addEventListener('click', function 
     fileInput.style.display = 'none';
     document.body.appendChild(fileInput);
 
-    fileInput.addEventListener('change', function () {
+    fileInput.addEventListener('change', async function () {
         if (!fileInput.files.length) { fileInput.remove(); return; }
         var file = fileInput.files[0];
-        var folderName = prompt('Enter folder name for the new white page:');
+        var folderName = await window.promptDialog('Enter folder name for the new white page:');
         if (!folderName || !folderName.trim()) { fileInput.remove(); return; }
         folderName = folderName.trim();
         if (!/^[a-zA-Z0-9_\-\.]+$/.test(folderName)) {
-            alert('Invalid folder name. Use only letters, numbers, hyphens, underscores, dots.');
+            notify('Invalid folder name. Use only letters, numbers, hyphens, underscores, dots.', 'error');
             fileInput.remove();
             return;
         }
@@ -80,12 +80,12 @@ document.querySelector('.white-upload-zip')?.addEventListener('click', function 
             .then(function (r) { return r.json(); })
             .then(function (data) {
                 if (data.error) {
-                    alert('Upload error: ' + data.result);
+                    notify('Upload error: ' + data.result, 'error');
                 } else {
                     document.getElementById('white_folder_container').insertAdjacentHTML('beforeend', buildWhiteFolderRow(data.folder));
                 }
             })
-            .catch(function (err) { alert('Upload failed: ' + err); })
+            .catch(function (err) { notify('Upload failed: ' + err, 'error'); })
             .finally(function () {
                 btn.innerHTML = '<i class="bi bi-upload"></i> Upload ZIP';
                 btn.style.pointerEvents = '';

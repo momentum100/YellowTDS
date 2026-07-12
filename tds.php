@@ -11,14 +11,20 @@ class Tds
     public static function getAction(): CloakerAction
     {
         global $db;
-        $dbCamp = $db->get_campaign_by_domain();
+        $campaignRoute = get_campaign_request_route();
+        $dbCamp = $db->get_campaign_by_domain($campaignRoute['public_id'] ?? null);
         if ($dbCamp === false) {
-            $action = traficback(FiltrationCore::get_click_params());
+            $action = $campaignRoute !== null
+                ? new CloakerAction('campaign', 'error', '404')
+                : traficback(FiltrationCore::get_click_params());
         } else {
             $c = new Campaign($dbCamp['id'], $dbCamp['settings']);
+            if ($campaignRoute === null && get_campaign_request_path() === '' && $c->usesUnifiedStreams()) {
+                return new CloakerAction('campaign', 'redirect', get_campaign_route_url($c->publicId), 302);
+            }
             $clkr = new FiltrationCore();
 
-            if ($clkr->click_matches_filters($c->white->filters)) {
+            if (!$c->usesUnifiedStreams() && $clkr->click_matches_filters($c->white->filters)) {
                 $db->add_white_click($clkr->click_params, $clkr->block_reason, $c->campaignId);
                 $action = white($c);
             } else {
@@ -48,7 +54,7 @@ class Tds
             $c = new Campaign($dbCamp['id'], $dbCamp['settings']);
             $clkr = new FiltrationCore($prefill);
 
-            if ($clkr->click_matches_filters($c->white->filters)) {
+            if (!$c->usesUnifiedStreams() && $clkr->click_matches_filters($c->white->filters)) {
                 $db->add_white_click($clkr->click_params, $clkr->block_reason, $c->campaignId);
                 $action = white($c);
             } else {
@@ -74,7 +80,7 @@ class Tds
         return JsAction::FromCloakerAction($action);
     }
 
-    public static function processJsCheck(): JsAction
+    public static function processJsCheck(array $prefill = []): JsAction
     {
         global $db;
         $dbCamp = $db->get_campaign_by_domain();
@@ -87,9 +93,21 @@ class Tds
             return $action;
         }
 
-        //This means that the user didn't pass JS checks
+        $c = new Campaign($dbCamp['id'], $dbCamp['settings']);
+
+        // This means that the user didn't pass JS checks.
         if (isset($_GET['reason'])) {
-            $added = $db->add_white_click(FiltrationCore::get_click_params(), $_GET['reason'], $dbCamp['id']);
+            if ($c->usesUnifiedStreams()) {
+                session_remove('jscheck_pending');
+                $clkr = new FiltrationCore($prefill);
+                $clkr->click_params['reason'] = (string)$_GET['reason'];
+                $flowIndex = self::pick_flow_index($clkr, $c->black->flows);
+                $action = $flowIndex === null
+                    ? traficback($clkr->click_params)
+                    : black($c, $flowIndex, $clkr->click_params);
+                return JsAction::FromCloakerAction($action);
+            }
+            $added = $db->add_white_click(FiltrationCore::get_click_params($prefill), $_GET['reason'], $dbCamp['id']);
             if (DebugMethods::on()) {
                 $msg = ($added ? "console.log('Debug: White click logged.');" : "console.log('Debug: Error adding white click!');");
                 $action = new JsAction("white", "js", $msg);
@@ -99,15 +117,24 @@ class Tds
         } else {
             $jscheck_start_time = session_read('jscheck_pending');
             $current_time = time();
-            $c = new Campaign($dbCamp['id'], $dbCamp['settings']);
             // Convert from milliseconds to seconds
             $max_execution_time = $c->black->jsBotDetection->timeout / 1000;
             // Add 5 second buffer
             $allowed_time = $jscheck_start_time + $max_execution_time + 5;
 
             if ($current_time > $allowed_time) {
+                if ($c->usesUnifiedStreams()) {
+                    session_remove('jscheck_pending');
+                    $clkr = new FiltrationCore($prefill);
+                    $clkr->click_params['reason'] = 'jscheck_scam_timeout';
+                    $flowIndex = self::pick_flow_index($clkr, $c->black->flows);
+                    $action = $flowIndex === null
+                        ? traficback($clkr->click_params)
+                        : black($c, $flowIndex, $clkr->click_params);
+                    return JsAction::FromCloakerAction($action);
+                }
                 // Attempt to pass JS check after timeout
-                $db->add_white_click(FiltrationCore::get_click_params(), 'jscheck_scam_timeout', $dbCamp['id']);
+                $db->add_white_click(FiltrationCore::get_click_params($prefill), 'jscheck_scam_timeout', $dbCamp['id']);
                 session_remove('jscheck_pending');
                 if (DebugMethods::on()) {
                     $action = new JsAction("white", "js", "console.log('Debug: JS check scam - timeout exceeded');");
@@ -120,7 +147,7 @@ class Tds
             // All security checks passed - remove pending flag and allow black
             session_remove('jscheck_pending');
             session_write('jscheck_passed', true);
-            $clkr = new FiltrationCore();
+            $clkr = new FiltrationCore($prefill);
             $flowIndex = self::pick_flow_index($clkr, $c->black->flows);
             if ($flowIndex === null) {
                 $action = traficback($clkr->click_params);
@@ -149,7 +176,7 @@ class Tds
             $c = new Campaign($dbCamp['id'], $dbCamp['settings']);
             $clkr = new FiltrationCore($prefill);
 
-            if ($clkr->click_matches_filters($c->white->filters)) {
+            if (!$c->usesUnifiedStreams() && $clkr->click_matches_filters($c->white->filters)) {
                 $db->add_white_click($clkr->click_params, $clkr->block_reason, $c->campaignId);
                 $action = white($c);
             } else {
@@ -171,6 +198,33 @@ class Tds
 
     public static function pick_flow_index(FiltrationCore $clkr, array $flows): ?int
     {
+        $unified = false;
+        foreach ($flows as $flow) {
+            if ($flow->type === 'default' || $flow->id !== '') {
+                $unified = true;
+                break;
+            }
+        }
+
+        if ($unified) {
+            foreach (['forced', 'regular'] as $type) {
+                foreach ($flows as $i => $flow) {
+                    if (!$flow->enabled || $flow->type !== $type) {
+                        continue;
+                    }
+                    if ($clkr->click_matches_filters($flow->filters)) {
+                        return $i;
+                    }
+                }
+            }
+            foreach ($flows as $i => $flow) {
+                if ($flow->type === 'default') {
+                    return $i;
+                }
+            }
+            return null;
+        }
+
         for ($i = 0; $i < count($flows); $i++) {
             if ($clkr->click_matches_filters($flows[$i]->filters)) {
                 return $i;

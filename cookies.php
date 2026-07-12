@@ -3,9 +3,17 @@
 function set_cookie($name, $value, $sessionOnly = false): void
 {
     if (!$sessionOnly) {
-        $path = '/';
         $expires = time() + 60 * 60 * 24 * 5; //time to live for cookies - 5 days
-        header("Set-Cookie: {$name}={$value}; Expires={$expires}; Path={$path}; SameSite=None; Secure", false);
+        $isSecure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
+        setcookie($name, (string)$value, [
+            'expires' => $expires,
+            'path' => '/',
+            'secure' => $isSecure,
+            'httponly' => true,
+            'samesite' => $isSecure ? 'None' : 'Lax',
+        ]);
+        // Keep reads in the same request consistent with the response cookie.
+        $_COOKIE[$name] = (string)$value;
     }
     session_write($name, $value);
 }
@@ -109,9 +117,10 @@ function get_session($readOnly = false)
 
     $isSecure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
     session_set_cookie_params([
-        "SameSite" => $isSecure ? "None" : "Lax",
-        "Secure"   => $isSecure,
-        "HttpOnly" => false,
+        'path' => '/',
+        'samesite' => $isSecure ? 'None' : 'Lax',
+        'secure' => $isSecure,
+        'httponly' => true,
     ]);
     
     if ($readOnly) {

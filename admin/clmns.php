@@ -41,7 +41,8 @@ class AvailableColumns
         "step",
         "status",
         "cost",
-        "payout"
+        "payout",
+        "reason"
     ];
 
     static $leadsColumns = [
@@ -67,7 +68,8 @@ class AvailableColumns
         "status",
         "payout",
         "name",
-        "phone"
+        "phone",
+        "reason"
     ];
     static $trafficbackColumns = [
         "ip",
@@ -251,15 +253,15 @@ class TableColumns
                 "width" => "200"
             ],
             "params" => [
-                "title" => "Subs",
+                "title" => "Subs (all)",
                 "field" => "params",
                 "headerTooltip" => "All url parameters",
                 "editor" => false,
                 "headerFilter" => false,
                 "headerFilterFunc" => "FSTARTfunction(headerValue, rowValue, rowData, filterParams){ if (rowValue.length===0) return false; return JSON.stringify(rowValue).includes(headerValue);}FEND", 
                 "headerSort" => false,
-                "tooltip" => "FSTARTfunction(e, cell, onRendered){ var data = cell.getValue(); var keys = Object.keys(data).sort(); var formattedData = ''; keys.forEach(function(key) { if (data.hasOwnProperty(key)) { formattedData += key + '=' + data[key] + '<br>'; } }); return formattedData;}FEND",
-                "formatter" => "FSTARTfunction(cell, formatterParams, onRendered){var data = cell.getValue();var keys = Object.keys(data).sort();var formattedData = ''; keys.forEach(function(key) { if (data.hasOwnProperty(key)) { formattedData += key + '=' + data[key] + '<br>';}}); return formattedData;}FEND"
+                "tooltip" => "FSTARTfunction(e, cell, onRendered){var data=cell.getValue()||{};return Object.keys(data).sort().map(function(key){return key+'='+data[key];}).join('\n');}FEND",
+                "formatter" => "FSTARTfunction(cell){var data=cell.getValue()||{};var el=document.createElement('span');el.style.whiteSpace='nowrap';el.textContent=Object.keys(data).sort().map(function(key){return key+'='+data[key];}).join(' · ');return el;}FEND"
             ],
             "userid"=>[
                 "title" => "UserID",

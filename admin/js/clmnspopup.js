@@ -26,6 +26,16 @@ function addColumnsToList(selectedClmns, availableClmns, existingFilters, filter
             $list.append(createSortableItem(columnField, formatColumnName(columnField), false));
         }
     });
+
+    // Show observed/common URL parameters as independent optional columns.
+    const availableParams = options?.availableParams || [];
+    availableParams.forEach(paramName => {
+        const field = 'param.' + paramName;
+        if (!selectedFields.includes(field)) {
+            const div = createParamItemElement('columnsList', paramName, false);
+            if (div) $list.append(div);
+        }
+    });
     
     // Destroy existing Sortable instance if it exists
     if (columnsSortable) {
@@ -47,17 +57,13 @@ function addColumnsToList(selectedClmns, availableClmns, existingFilters, filter
     document.removeEventListener('click', handleAddParamColumn);
     document.addEventListener('click', handleAddParamColumn);
 
-    // Initialize filters (pass extra fields like 'reason' for blocked clicks)
-    const extraFields = filterType === 'blocked' ? ['reason'] : [];
-    initializeFilters(existingFilters || {}, extraFields);
-
     // Initial button state
     updateSaveButtonState();
 }
 
-function handleAddParamColumn(e) {
+async function handleAddParamColumn(e) {
     if (!e.target.closest('#addParamColumn')) return;
-    const name = prompt('URL param name:');
+    const name = await window.promptDialog('URL param name:');
     if (!name || !name.trim()) return;
     const clean = name.trim().replace(/[^a-zA-Z0-9_]/g, '');
     if (!clean) return;
@@ -74,7 +80,7 @@ function setSaveButtonHandler(handlerUrl) {
         const selectedColumns = getSelectedColumns();
         
         if (selectedColumns.length === 0) {
-            alert('Please select at least one column');
+            notify('Please select at least one column', 'error');
             return;
         }
 
@@ -84,7 +90,7 @@ function setSaveButtonHandler(handlerUrl) {
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ columns: selectedColumns, filters: collectFilters() })
+                body: JSON.stringify({ columns: selectedColumns })
             });
 
             if (!response.ok) {
@@ -98,7 +104,7 @@ function setSaveButtonHandler(handlerUrl) {
                 throw new Error(data.msg);
             }
         } catch (error) {
-            alert('Error saving columns: ' + error.message);
+            notify('Error saving columns: ' + error.message, 'error');
         }
     });
 }

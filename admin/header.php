@@ -67,7 +67,7 @@ $headerDateConfig = [
                     <div class="logo-pro">
                         <div class="logo-container">
                             <a href="index.php?startdate=<?=$calDs[0]?>&enddate=<?=$calDs[1]?>" class="logo-link">
-                                <img class="main-logo" src="<?=get_admin_base_url()?>img/logo.png" alt="" />
+                                <img class="main-logo" src="<?=get_admin_base_url()?>img/yellow-tds-logo-wide-transparent.png?v=<?=filemtime(__DIR__.'/img/yellow-tds-logo-wide-transparent.png')?>" alt="Yellow TDS" />
                             </a>
                             <div class="geo-version">
                                 <?php 

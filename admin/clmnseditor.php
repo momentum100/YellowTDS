@@ -42,12 +42,18 @@ switch ($action) {
 
         $newColumns = get_new_columns($currentColumns, $columnNames);
         $saved = save_columns_for_type($newColumns, $table, $campId);
-        if ($saved) {
+        if ($saved && array_key_exists('filters', $data)) {
             save_filters_for_type($filters, $table, $campId);
         }
         return $saved? 
             send_clmnseditor_result("OK"):
             send_clmnseditor_result("Error saving settings!",true);
+    case 'savefilters':
+        $data = json_decode($postData, true);
+        $filters = is_array($data) ? ($data['filters'] ?? []) : [];
+        return save_filters_for_type($filters, $table, $campId)
+            ? send_clmnseditor_result("OK")
+            : send_clmnseditor_result("Error saving filters!", true);
     
     case 'newstats':
     case 'savestats':

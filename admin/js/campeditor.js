@@ -22,7 +22,7 @@ async function campEditor(action, campId=null, name=null) {
     });
     let js = await res.json();
     if (js.error)
-        alert(`An error occured: ${js.result}`);
+        notify(`An error occured: ${js.result}`, 'error');
     else
         window.location.reload();
 }
@@ -44,9 +44,7 @@ document.addEventListener('DOMContentLoaded', function() {
         <div class="camp-menu-item btn-rename"><i class="bi bi-pencil-fill"></i> Rename</div>
         <div class="camp-menu-item btn-clone"><i class="bi bi-copy"></i> Clone</div>
         <div class="camp-menu-item btn-stats"><i class="bi bi-bar-chart-fill"></i> Statistics</div>
-        <div class="camp-menu-item btn-allowed"><i class="bi bi-person-circle"></i> Allowed</div>
-        <div class="camp-menu-item btn-blocked"><i class="bi bi-ban"></i> Blocked</div>
-        <div class="camp-menu-item btn-leads"><i class="bi bi-coin"></i> Leads</div>
+        <div class="camp-menu-item btn-clicks"><i class="bi bi-cursor-fill"></i> Clicks</div>
         <div class="camp-menu-divider"></div>
         <div class="camp-menu-item btn-delete camp-menu-danger"><i class="bi bi-trash-fill"></i> Delete</div>
     `;
@@ -71,19 +69,19 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (menuItem.classList.contains('btn-rename')) {
             const currentName = campaignName ?? '';
-            const newName = prompt("Enter new campaign name:", currentName);
+            const newName = await window.promptDialog("Enter new campaign name:", currentName);
             if (newName == null) return;
             const trimmedName = newName.trim();
             if (trimmedName) {
                 await campEditor('ren', campaignId, trimmedName);
             } else {
-                alert('Campaign name can not be empty!');
+                notify('Campaign name can not be empty!', 'error');
             }
             return;
         }
 
         if (menuItem.classList.contains('btn-delete')) {
-            if (confirm(`Are you sure? Going to delete campaign ${campaignName}.`)) {
+            if (await window.confirmDialog(`Are you sure? Going to delete campaign ${campaignName}.`)) {
                 await campEditor('del', campaignId);
             }
             return;
@@ -91,11 +89,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (menuItem.classList.contains('btn-clone')) {
             const defaultCloneName = `${campaignName ?? ''} (Clone)`;
-            const newName = prompt("Enter cloned campaign name:", defaultCloneName);
+            const newName = await window.promptDialog("Enter cloned campaign name:", defaultCloneName);
             if (newName == null) return;
             const trimmedName = newName.trim();
             if (!trimmedName) {
-                alert('Campaign name can not be empty!');
+                notify('Campaign name can not be empty!', 'error');
                 return;
             }
             await campEditor('dup', campaignId, trimmedName);
@@ -108,18 +106,8 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        if (menuItem.classList.contains('btn-allowed')) {
+        if (menuItem.classList.contains('btn-clicks')) {
             window.location.href = `clicks.php?campId=${campaignId}&view=allowed${startDateEndDateParams}`;
-            return;
-        }
-
-        if (menuItem.classList.contains('btn-blocked')) {
-            window.location.href = `clicks.php?campId=${campaignId}&view=blocked${startDateEndDateParams}`;
-            return;
-        }
-
-        if (menuItem.classList.contains('btn-leads')) {
-            window.location.href = `clicks.php?campId=${campaignId}&view=leads${startDateEndDateParams}`;
             return;
         }
     });
@@ -151,7 +139,15 @@ function campNameCellClick(e, cell) {
                 campMenuDropdown.style.top = (btnRect.top - menuH) + 'px';
                 campMenuDropdown.style.bottom = '';
             }
-            campMenuDropdown.style.left = (btnRect.right - campMenuDropdown.offsetWidth) + 'px';
+            // Open from the button towards the right. Clamp it to the viewport
+            // for narrow screens and buttons close to either edge.
+            const menuW = campMenuDropdown.offsetWidth;
+            const viewportPadding = 8;
+            const left = Math.min(
+                Math.max(btnRect.left, viewportPadding),
+                window.innerWidth - menuW - viewportPadding
+            );
+            campMenuDropdown.style.left = left + 'px';
         }
         return;
     }

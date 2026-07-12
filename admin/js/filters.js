@@ -153,6 +153,14 @@ var tdsFilters = [
             'param_not_exists'
         ],
         size: 30
+    },
+    {
+        id: 'reason',
+        label: 'Detection reason',
+        input: 'text',
+        type: 'string',
+        operators: ['equal', 'not_equal', 'contains', 'not_contains'],
+        size: 70
     }
 ];
 

@@ -1,7 +1,6 @@
 import { getFlowDist, redistributeWeights, redistributeWeightsAfterDelete } from './weights.js';
-import { buildFolderRow, buildRedirectRow, buildFlowSection, buildStepSection, buildStepListRow, renumberSteps, updateStepListInfo, updateAllStepListInfo, updateStepControls } from './templates.js';
+import { buildFolderRow, buildRedirectRow, buildFlowSection, buildStepSection, buildStepListRow, renumberSteps, updateStepListInfo, updateAllStepListInfo, updateStepControls } from './templates.js?v=2';
 import { openFolderPicker } from './folder-picker.js';
-import { handleZipUpload } from './zip-upload.js';
 
 // ── State ──
 var flowCounter = 0;
@@ -77,8 +76,8 @@ export function handleStepAddExisting(e) {
     btn.disabled = true;
     fetch('listfolders.php').then(function (r) { return r.json(); }).then(function (data) {
         btn.disabled = false;
-        if (data.error) { alert(data.result); return; }
-        if (!data.folders.length) { alert('No folders found. Upload a ZIP first.'); return; }
+        if (data.error) { notify(data.result, 'error'); return; }
+        if (!data.folders.length) { notify('No folders found. Upload a ZIP first.', 'error'); return; }
 
         openFolderPicker(data.folders).then(function (choice) {
             if (!choice) return;
@@ -88,14 +87,7 @@ export function handleStepAddExisting(e) {
             }
             updateStepListInfo(fi, stepSec.dataset.stepIndex);
         });
-    }).catch(function (err) { btn.disabled = false; alert('Error: ' + err); });
-}
-
-// ── Upload ZIP to a step ──
-export function handleStepUploadZip(e) {
-    var btn = e.target.closest('.flow-step-upload-zip');
-    if (!btn) return;
-    handleZipUpload(btn);
+    }).catch(function (err) { btn.disabled = false; notify('Error: ' + err, 'error'); });
 }
 
 // ── Add redirect to a step ──
@@ -129,13 +121,13 @@ export function handleEditFolder(e) {
     if (!item) return;
     var folderInput = item.querySelector('.flow-step-folder');
     if (!folderInput || !folderInput.value.trim()) {
-        alert('Please enter a folder name first.');
+        notify('Please enter a folder name first.', 'error');
         return;
     }
     if (typeof window.openFileEditor === 'function') {
         window.openFileEditor(folderInput.value.trim());
     } else {
-        alert('File editor not loaded.');
+        notify('File editor not loaded.', 'error');
     }
 }
 
@@ -309,12 +301,14 @@ export function handleMoveDown(e) {
 }
 
 // ── Flow list: Delete ──
-export function handleDeleteFlow(e) {
+export async function handleDeleteFlow(e) {
     var btn = e.target.closest('.flow-delete');
     if (!btn) return;
-    if (!confirm('Delete this flow?')) return;
+    if (!(await window.confirmDialog('Delete this flow?'))) return;
     var row = btn.closest('.flow-list-row');
     var fi = row.dataset.flowIndex;
+    if (window.showSection) window.showSection('sec-flows');
+    history.replaceState(null, '', '#sec-flows');
     // Remove all step sections for this flow
     document.querySelectorAll('.step-section[data-flow-index="' + fi + '"]').forEach(function (s) { s.remove(); });
     // Remove all step nav items for this flow
@@ -330,8 +324,8 @@ export function handleDeleteFlow(e) {
 }
 
 // ── Add Flow ──
-export function handleAddFlow() {
-    var flowName = prompt('Enter flow name (cannot be changed later):');
+export async function handleAddFlow() {
+    var flowName = await window.promptDialog('Enter stream name:');
     if (!flowName || !flowName.trim()) return;
     flowName = flowName.trim();
 
@@ -339,7 +333,7 @@ export function handleAddFlow() {
     var existing = document.querySelectorAll('.flow-name-label');
     for (var i = 0; i < existing.length; i++) {
         if (existing[i].value === flowName) {
-            alert('Flow name "' + flowName + '" already exists. Choose a different name.');
+            notify('Flow name "' + flowName + '" already exists. Choose a different name.', 'error');
             return;
         }
     }
@@ -348,22 +342,32 @@ export function handleAddFlow() {
     flowCounter++;
 
     // 1. Add list row
-    var rowHtml = '<div class="flow-list-row" data-flow-index="' + fi + '">' +
-        '<input type="text" class="form-control flow-name-label" value="' + flowName + '" readonly style="display:inline-block;width:200px;cursor:default;" /> ' +
-        '<a href="javascript:void(0)" class="btn btn-primary btn-sm flow-move-up" title="Move Up">&uarr;</a> ' +
-        '<a href="javascript:void(0)" class="btn btn-primary btn-sm flow-move-down" title="Move Down">&darr;</a> ' +
+    var rowHtml = '<div class="flow-list-row" data-flow-index="' + fi + '" data-stream-id="">' +
+        '<span class="flow-drag-handle" title="Drag to reorder">☰</span>' +
+        '<label class="flow-enabled-toggle"><input type="checkbox" class="flow-enabled" checked> On</label>' +
+        '<select class="form-select flow-type"><option value="forced">Forced</option><option value="regular" selected>Regular</option></select>' +
+        '<input type="text" class="form-control flow-name-label" value="' + flowName.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;') + '" /> ' +
+        '<span class="flow-row-stats">0 / 0 / 0</span>' +
+        '<code class="flow-short-id">new</code>' +
+        '<button type="button" class="btn btn-primary btn-sm flow-edit-stream">Edit</button>' +
         '<a href="javascript:void(0)" class="btn btn-danger btn-sm flow-delete" title="Delete"><i class="bi bi-trash"></i></a>' +
         '</div>';
-    document.getElementById('flows-list').insertAdjacentHTML('beforeend', rowHtml);
+    var flowsList = document.getElementById('flows-list');
+    var defaultRow = flowsList.querySelector('.flow-default-row');
+    if (defaultRow) defaultRow.insertAdjacentHTML('beforebegin', rowHtml);
+    else flowsList.insertAdjacentHTML('beforeend', rowHtml);
 
     // 2. Add sidebar nav item (after last step-nav-item or flow-nav-item, or after sec-flows)
     var navHtml = '<li class="flow-nav-item" data-flow-index="' + fi + '"><a href="#sec-flow-' + fi + '">&nbsp;&nbsp;' + flowName + '</a></li>';
-    var allStepNavs = document.querySelectorAll('.step-nav-item');
+    var defaultNav = defaultRow ? document.querySelector('.flow-nav-item[data-flow-index="' + defaultRow.dataset.flowIndex + '"]') : null;
     var allFlowNavs = document.querySelectorAll('.flow-nav-item');
-    if (allStepNavs.length > 0) {
-        allStepNavs[allStepNavs.length - 1].insertAdjacentHTML('afterend', navHtml);
+    if (defaultNav) {
+        defaultNav.insertAdjacentHTML('beforebegin', navHtml);
     } else if (allFlowNavs.length > 0) {
-        allFlowNavs[allFlowNavs.length - 1].insertAdjacentHTML('afterend', navHtml);
+        var lastFlowNav = allFlowNavs[allFlowNavs.length - 1];
+        var lastStepNavs = document.querySelectorAll('.step-nav-item[data-flow-index="' + lastFlowNav.dataset.flowIndex + '"]');
+        var insertAfter = lastStepNavs.length ? lastStepNavs[lastStepNavs.length - 1] : lastFlowNav;
+        insertAfter.insertAdjacentHTML('afterend', navHtml);
     } else {
         var flowsNavLink = document.querySelector('a[href="#sec-flows"]');
         if (flowsNavLink) flowsNavLink.closest('li').insertAdjacentHTML('afterend', navHtml);
@@ -373,8 +377,11 @@ export function handleAddFlow() {
     var sectionFrag = buildFlowSection(fi, flowName);
 
     // Insert section before sec-scripts (or at end of camp-content)
+    var defaultSection = defaultRow ? document.getElementById('sec-flow-' + defaultRow.dataset.flowIndex) : null;
     var scriptsSection = document.getElementById('sec-scripts');
-    if (scriptsSection) {
+    if (defaultSection) {
+        defaultSection.parentNode.insertBefore(sectionFrag, defaultSection);
+    } else if (scriptsSection) {
         scriptsSection.parentNode.insertBefore(sectionFrag, scriptsSection);
     } else {
         document.querySelector('.camp-content').appendChild(sectionFrag);
@@ -392,4 +399,5 @@ export function handleAddFlow() {
 
     // 5. Navigate to the new flow section
     if (window.showSection) window.showSection('sec-flow-' + fi);
+    history.replaceState(null, '', '#sec-flow-' + fi);
 }

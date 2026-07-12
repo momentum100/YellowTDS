@@ -1,0 +1,22 @@
+<div id="clickFiltersModal" class="ywbmodal ywbmodal-narrow">
+    <div class="modal-content">
+        <div class="modal-header"><h5>Click filters</h5></div>
+        <div class="modal-body">
+            <div class="click-filter-toolbar">
+                <label>Match
+                    <select id="filterCondition" class="form-control">
+                        <option value="AND">all conditions (AND)</option>
+                        <option value="OR">any condition (OR)</option>
+                    </select>
+                </label>
+                <button id="addFilterRow" type="button" class="btn btn-sm btn-outline-primary">+ Add condition</button>
+            </div>
+            <div id="filterRows" class="click-filter-rows"></div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-outline-danger" id="clearClickFilters">Clear all</button>
+            <button type="button" class="btn btn-secondary" id="closeClickFilters">Cancel</button>
+            <button type="button" class="btn btn-primary" id="saveClickFilters">Apply filters</button>
+        </div>
+    </div>
+</div>

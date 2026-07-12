@@ -18,14 +18,14 @@ require_once __DIR__ . '/../tds.php';
 require_once __DIR__ . '/../actions.php';
 require_once __DIR__ . '/../cookies.php';
 
+$prefill = [];
+if (isset($_GET['tds_qs']))
+    $prefill['tds_qs'] = base64_decode($_GET['tds_qs']);
+$prefill['tds_ref'] = $_GET['tds_ref'] ?? '';
+
 if (!is_null(session_read('jscheck_pending')))
-    $action = Tds::processJsCheck();
+    $action = Tds::processJsCheck($prefill);
 else {
-    $prefill = [];
-    if (isset($_GET['tds_qs']))
-        $prefill['tds_qs'] = base64_decode($_GET['tds_qs']);
-    $prefill['tds_ref'] = $_GET['tds_ref'] ?? '';
     $action = Tds::getJsAction($prefill);
 }
 $action->perform();
-

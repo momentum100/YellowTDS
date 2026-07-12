@@ -2,6 +2,7 @@
 
 require_once __DIR__ . '/db/db.php';
 require_once __DIR__ . '/logging.php';
+require_once __DIR__ . '/campaignroute.php';
 
 class Campaign implements JsonSerializable
 {
@@ -9,6 +10,8 @@ class Campaign implements JsonSerializable
     public array $domains;
     public bool $saveUserFlow;
     public string $apiKey;
+    public string $publicId;
+    public array $publicIdAliases;
 
     public WhiteSettings $white;
     public BlackSettings $black;
@@ -23,6 +26,8 @@ class Campaign implements JsonSerializable
         $this->domains = $s['domains'];
         $this->saveUserFlow = $s['saveuserflow'];
         $this->apiKey = $s['apikey'];
+        $this->publicId = get_campaign_public_id($campId, $s);
+        $this->publicIdAliases = get_campaign_public_id_aliases($s, $campId);
 
         $this->white = WhiteSettings::fromArray($s['white']);
         $this->black = BlackSettings::fromArray($s['black']);
@@ -38,12 +43,24 @@ class Campaign implements JsonSerializable
             "domains" => $this->domains,
             "saveuserflow" => $this->saveUserFlow,
             "apikey" => $this->apiKey,
+            "publicid" => $this->publicId,
+            "publicidaliases" => $this->publicIdAliases,
             "white" => $this->white,
             "black" => $this->black,
             "statistics" => $this->statistics,
             "postback" => $this->postback,
             "scripts" => $this->scripts
         ];
+    }
+
+    public function usesUnifiedStreams(): bool
+    {
+        return $this->black->streamVersion >= 2;
+    }
+
+    public function acceptsPublicId(string $publicId): bool
+    {
+        return $publicId === $this->publicId || in_array($publicId, $this->publicIdAliases, true);
     }
 }
 
@@ -165,12 +182,14 @@ class BlackSettings implements JsonSerializable
     public JsBotDetection $jsBotDetection;
     /** @var FlowSettings[] */
     public array $flows;
+    public int $streamVersion;
 
     public static function fromArray($arr): BlackSettings
     {
         $bs = new BlackSettings();
         $bs->jsconnectAction = $arr['jsconnect'];
         $bs->jsBotDetection = JsBotDetection::fromArray($arr['jsbotdetection']);
+        $bs->streamVersion = (int)($arr['streamversion'] ?? 1);
         $bs->flows = [];
         foreach ($arr['flows'] as $f) {
             $bs->flows[] = FlowSettings::fromArray($f);
@@ -183,6 +202,7 @@ class BlackSettings implements JsonSerializable
         return [
             "jsconnect" => $this->jsconnectAction,
             "jsbotdetection" => $this->jsBotDetection,
+            "streamversion" => $this->streamVersion,
             "flows" => $this->flows
         ];
     }
@@ -190,7 +210,10 @@ class BlackSettings implements JsonSerializable
 
 class FlowSettings implements JsonSerializable
 {
+    public string $id;
     public string $name;
+    public string $type;
+    public bool $enabled;
     public array $filters;
     /** @var StepSettings[] */
     public array $steps;
@@ -201,7 +224,11 @@ class FlowSettings implements JsonSerializable
     public static function fromArray($arr): FlowSettings
     {
         $fs = new FlowSettings();
+        $fs->id = (string)($arr['id'] ?? '');
         $fs->name = $arr['name'] ?? 'Flow';
+        $type = (string)($arr['type'] ?? 'regular');
+        $fs->type = in_array($type, ['forced', 'regular', 'default'], true) ? $type : 'regular';
+        $fs->enabled = $fs->type === 'default' ? true : (bool)($arr['enabled'] ?? true);
         $fs->filters = $arr['filters'] ?? [];
         $fs->steps = [];
         foreach (($arr['steps'] ?? []) as $s) {
@@ -216,7 +243,10 @@ class FlowSettings implements JsonSerializable
     public function jsonSerialize(): array
     {
         return [
+            "id" => $this->id,
             "name" => $this->name,
+            "type" => $this->type,
+            "enabled" => $this->enabled,
             "filters" => $this->filters,
             "steps" => $this->steps,
             "distribution" => $this->distribution,
@@ -242,7 +272,7 @@ class StepSettings implements JsonSerializable
     public array $folderNames;
     /** @var array<array{url: string, label: string}> */
     public array $redirectUrls;
-    public int $redirectType;
+    public int|string $redirectType;
     public array $weights;
     public array $folderLoadTypes;
 
@@ -252,7 +282,8 @@ class StepSettings implements JsonSerializable
         $ss->action = $arr['action'] ?? 'folder';
         $ss->folderNames = $arr['folders'] ?? [];
         $ss->redirectUrls = $arr['redirect']['urls'] ?? [];
-        $ss->redirectType = $arr['redirect']['type'] ?? 302;
+        $redirectType = $arr['redirect']['type'] ?? 302;
+        $ss->redirectType = in_array($redirectType, ['meta', 'js'], true) ? $redirectType : (int)$redirectType;
         $ss->weights = $arr['weights'] ?? [];
         $ss->folderLoadTypes = $arr['folderloadtypes'] ?? [];
         return $ss;
@@ -278,10 +309,18 @@ class StepSettings implements JsonSerializable
         return $this->action === 'folder';
     }
 
+    public function isTerminalAction(): bool
+    {
+        return in_array($this->action, ['http404', 'nothing'], true);
+    }
+
     public function getItems(): array
     {
         if ($this->isRedirect()) {
             return array_map(fn($r) => $r['label'] ?? $r['url'] ?? '', $this->redirectUrls);
+        }
+        if ($this->isTerminalAction()) {
+            return [$this->action];
         }
         return $this->folderNames;
     }

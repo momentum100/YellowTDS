@@ -30,7 +30,7 @@ document.addEventListener('change', function (e) {
 });
 
 // ── Domain-specific: delegated click handlers ──
-document.addEventListener('click', function (e) {
+document.addEventListener('click', async function (e) {
     // Remove folder
     var btn = e.target.closest('.dws-remove-folder');
     if (btn) { var row = btn.closest('.dws-folder-item'); if (row) row.remove(); return; }
@@ -58,15 +58,15 @@ document.addEventListener('click', function (e) {
         btn.disabled = true;
         fetch('listfolders.php?type=white').then(function (r) { return r.json(); }).then(function (data) {
             btn.disabled = false;
-            if (data.error) { alert(data.result); return; }
-            if (!data.folders.length) { alert('No white page folders found. Upload a ZIP first.'); return; }
+            if (data.error) { notify(data.result, 'error'); return; }
+            if (!data.folders.length) { notify('No white page folders found. Upload a ZIP first.', 'error'); return; }
             if (window.openFolderPicker) {
                 window.openFolderPicker(data.folders).then(function (choice) {
                     if (!choice) return;
                     section.querySelector('.dws-folder-items').insertAdjacentHTML('beforeend', buildDwsFolderRow(choice));
                 });
             }
-        }).catch(function (err) { btn.disabled = false; alert('Error: ' + err); });
+        }).catch(function (err) { btn.disabled = false; notify('Error: ' + err, 'error'); });
         return;
     }
     // Upload ZIP
@@ -76,9 +76,9 @@ document.addEventListener('click', function (e) {
         var fileInput = document.createElement('input');
         fileInput.type = 'file'; fileInput.accept = '.zip'; fileInput.style.display = 'none';
         document.body.appendChild(fileInput);
-        fileInput.addEventListener('change', function () {
+        fileInput.addEventListener('change', async function () {
             if (!fileInput.files.length) { fileInput.remove(); return; }
-            var folderName = prompt('Enter folder name for this white page:', fileInput.files[0].name.replace(/\.zip$/i, ''));
+            var folderName = await window.promptDialog('Enter folder name for this white page:', fileInput.files[0].name.replace(/\.zip$/i, ''));
             if (!folderName || !folderName.trim()) { fileInput.remove(); return; }
             var fd = new FormData();
             fd.append('zipfile', fileInput.files[0]);
@@ -89,10 +89,10 @@ document.addEventListener('click', function (e) {
             fetch('zipupload.php', { method: 'POST', body: fd })
                 .then(function (r) { return r.json(); })
                 .then(function (data) {
-                    if (data.error) { alert('Upload error: ' + data.result); }
+                    if (data.error) { notify('Upload error: ' + data.result, 'error'); }
                     else { section.querySelector('.dws-folder-items').insertAdjacentHTML('beforeend', buildDwsFolderRow(data.folder)); }
                 })
-                .catch(function (err) { alert('Upload failed: ' + err); })
+                .catch(function (err) { notify('Upload failed: ' + err, 'error'); })
                 .finally(function () {
                     btn.innerHTML = '<i class="bi bi-upload"></i> Upload ZIP';
                     btn.style.pointerEvents = '';
@@ -105,7 +105,7 @@ document.addEventListener('click', function (e) {
     // Add redirect URL
     btn = e.target.closest('.dws-add-redirect');
     if (btn) {
-        var url = prompt('Enter redirect URL:');
+        var url = await window.promptDialog('Enter redirect URL:');
         if (!url || !url.trim()) return;
         var section = btn.closest('.dws-section');
         section.querySelector('.dws-redirect-items').insertAdjacentHTML('beforeend',
@@ -119,7 +119,7 @@ document.addEventListener('click', function (e) {
     // Add CURL URL
     btn = e.target.closest('.dws-add-curl');
     if (btn) {
-        var url = prompt('Enter CURL URL:');
+        var url = await window.promptDialog('Enter CURL URL:');
         if (!url || !url.trim()) return;
         var section = btn.closest('.dws-section');
         section.querySelector('.dws-curl-items').insertAdjacentHTML('beforeend',
@@ -135,7 +135,7 @@ document.addEventListener('click', function (e) {
     // Add error code
     btn = e.target.closest('.dws-add-error');
     if (btn) {
-        var code = prompt('Enter HTTP code (e.g. 404):');
+        var code = await window.promptDialog('Enter HTTP code (e.g. 404):');
         if (!code || !code.trim()) return;
         var section = btn.closest('.dws-section');
         section.querySelector('.dws-error-items').insertAdjacentHTML('beforeend',

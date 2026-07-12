@@ -121,6 +121,7 @@ function black(Campaign $c, int $flowIndex, array $clickparams): CloakerAction
     set_clickid($clickid);
 
     $flow = $c->black->flows[$flowIndex];
+    $flowRef = $flow->id !== '' ? $flow->id : $flow->name;
     $steps = $flow->steps;
 
     if (empty($steps)) {
@@ -132,7 +133,7 @@ function black(Campaign $c, int $flowIndex, array $clickparams): CloakerAction
 
     $plannedPath = [];
     if ($c->saveUserFlow) {
-        $plannedPath = get_saved_flow_path($c->campaignId, $flow->name, $steps);
+        $plannedPath = get_saved_flow_path($c->campaignId, $flowRef, $steps);
     }
 
     if (empty($plannedPath)) {
@@ -142,7 +143,7 @@ function black(Campaign $c, int $flowIndex, array $clickparams): CloakerAction
             foreach ($steps as $step) {
                 $allStepItems[] = $step->getItems();
             }
-            $plannedPath = $abtest->select_thompson_funnel_multi($allStepItems, $flow->name, $flow->optimize_for);
+            $plannedPath = $abtest->select_thompson_funnel_multi($allStepItems, $flowRef, $flow->optimize_for);
         } else {
             foreach ($steps as $si => $step) {
                 $items = $step->getItems();
@@ -151,7 +152,7 @@ function black(Campaign $c, int $flowIndex, array $clickparams): CloakerAction
                 }
 
                 if ($isThompson) {
-                    $chosen = $abtest->select_thompson_variant($items, $si, $flow->name, $flow->optimize_for);
+                    $chosen = $abtest->select_thompson_variant($items, $si, $flowRef, $flow->optimize_for);
                 } else {
                     $isFolder = $step->isFolder();
                     $res = $abtest->select_distributed($items, "step_$si", $isFolder, $flow->distribution, $step->weights);
@@ -167,11 +168,11 @@ function black(Campaign $c, int $flowIndex, array $clickparams): CloakerAction
     }
 
     if ($c->saveUserFlow) {
-        save_flow_path($c->campaignId, $flow->name, $plannedPath);
+        save_flow_path($c->campaignId, $flowRef, $plannedPath);
     }
 
     // Record one click per full pass and first entered step.
-    if (!$db->add_black_click($userid, $clickid, $clickparams, $plannedPath, $flow->name, $c->campaignId)) {
+    if (!$db->add_black_click($userid, $clickid, $clickparams, $plannedPath, $flow->name, $c->campaignId, $flow->id)) {
         return new CloakerAction('black', 'die', 'Failed to record click');
     }
     if (!$db->add_click_step($clickid, 0, $plannedPath[0])) {
@@ -182,6 +183,13 @@ function black(Campaign $c, int $flowIndex, array $clickparams): CloakerAction
     $step0 = $steps[0];
     $chosenVariant = $plannedPath[0];
 
+    if ($step0->action === 'http404') {
+        return new CloakerAction('black', 'error', '404');
+    }
+    if ($step0->action === 'nothing') {
+        return new CloakerAction('black', 'html', '');
+    }
+
     if ($step0->isRedirect()) {
         $url = $step0->getRedirectUrlByLabel($chosenVariant);
         $mp = new MacrosProcessor($c, $clickparams);
@@ -190,8 +198,22 @@ function black(Campaign $c, int $flowIndex, array $clickparams): CloakerAction
     }
 
     if ($step0->isDirectLoad($chosenVariant)) {
-        $dlUrl = get_directload_step_url($clickid, 0);
-        return new CloakerAction('black', 'redirect', $dlUrl, 302);
+        $campaignRoute = get_campaign_request_route();
+        $activePublicId = $campaignRoute !== null && $c->acceptsPublicId($campaignRoute['public_id'])
+            ? $campaignRoute['public_id']
+            : $c->publicId;
+        set_campaign_route_context($activePublicId, $clickid, 0);
+        $html = load_step(
+            $c,
+            $flow,
+            0,
+            $chosenVariant,
+            $clickid,
+            true,
+            '',
+            get_campaign_route_base($activePublicId)
+        );
+        return new CloakerAction('black', 'html', $html);
     }
 
     $html = load_step($c, $flow, 0, $chosenVariant, $clickid, false);
