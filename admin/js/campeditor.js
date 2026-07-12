@@ -139,7 +139,15 @@ function campNameCellClick(e, cell) {
                 campMenuDropdown.style.top = (btnRect.top - menuH) + 'px';
                 campMenuDropdown.style.bottom = '';
             }
-            campMenuDropdown.style.left = (btnRect.right - campMenuDropdown.offsetWidth) + 'px';
+            // Open from the button towards the right. Clamp it to the viewport
+            // for narrow screens and buttons close to either edge.
+            const menuW = campMenuDropdown.offsetWidth;
+            const viewportPadding = 8;
+            const left = Math.min(
+                Math.max(btnRect.left, viewportPadding),
+                window.innerWidth - menuW - viewportPadding
+            );
+            campMenuDropdown.style.left = left + 'px';
         }
         return;
     }
