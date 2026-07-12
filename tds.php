@@ -74,7 +74,7 @@ class Tds
         return JsAction::FromCloakerAction($action);
     }
 
-    public static function processJsCheck(): JsAction
+    public static function processJsCheck(array $prefill = []): JsAction
     {
         global $db;
         $dbCamp = $db->get_campaign_by_domain();
@@ -89,7 +89,7 @@ class Tds
 
         //This means that the user didn't pass JS checks
         if (isset($_GET['reason'])) {
-            $added = $db->add_white_click(FiltrationCore::get_click_params(), $_GET['reason'], $dbCamp['id']);
+            $added = $db->add_white_click(FiltrationCore::get_click_params($prefill), $_GET['reason'], $dbCamp['id']);
             if (DebugMethods::on()) {
                 $msg = ($added ? "console.log('Debug: White click logged.');" : "console.log('Debug: Error adding white click!');");
                 $action = new JsAction("white", "js", $msg);
@@ -107,7 +107,7 @@ class Tds
 
             if ($current_time > $allowed_time) {
                 // Attempt to pass JS check after timeout
-                $db->add_white_click(FiltrationCore::get_click_params(), 'jscheck_scam_timeout', $dbCamp['id']);
+                $db->add_white_click(FiltrationCore::get_click_params($prefill), 'jscheck_scam_timeout', $dbCamp['id']);
                 session_remove('jscheck_pending');
                 if (DebugMethods::on()) {
                     $action = new JsAction("white", "js", "console.log('Debug: JS check scam - timeout exceeded');");
@@ -120,7 +120,7 @@ class Tds
             // All security checks passed - remove pending flag and allow black
             session_remove('jscheck_pending');
             session_write('jscheck_passed', true);
-            $clkr = new FiltrationCore();
+            $clkr = new FiltrationCore($prefill);
             $flowIndex = self::pick_flow_index($clkr, $c->black->flows);
             if ($flowIndex === null) {
                 $action = traficback($clkr->click_params);

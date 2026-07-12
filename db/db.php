@@ -7,6 +7,9 @@ require_once __DIR__ . "/../paths.php";
 
 class Db
 {
+    private const SCHEMA_VERSION = 1;
+    private const SQLITE_BUSY_TIMEOUT_MS = 10000;
+
     private const DERIVED_STATS_DEPENDENCIES = [
         'uniques_ratio' => ['clicks', 'uniques'],
         'cra' => ['clicks', 'conversion'],
@@ -42,32 +45,65 @@ class Db
     private function ensure_schema_migrations(): void
     {
         $db = new SQLite3($this->dbPath, SQLITE3_OPEN_READWRITE);
-        $db->busyTimeout(5000);
+        $this->configure_connection($db, false);
+        $transactionStarted = false;
 
-        $columns = [];
-        $result = $db->query("PRAGMA table_info(clicks)");
-        while ($row = $result?->fetchArray(SQLITE3_ASSOC)) {
-            $columns[] = $row['name'] ?? '';
+        try {
+            if ((int)$db->querySingle('PRAGMA user_version') >= self::SCHEMA_VERSION) {
+                return;
+            }
+
+            if (!$db->exec('BEGIN IMMEDIATE')) {
+                throw new Exception('Failed to lock database for schema migration: ' . $db->lastErrorMsg());
+            }
+            $transactionStarted = true;
+
+            // Another worker may have completed the migration while this worker waited.
+            if ((int)$db->querySingle('PRAGMA user_version') < self::SCHEMA_VERSION) {
+                $columns = [];
+                $result = $db->query('PRAGMA table_info(clicks)');
+                while ($row = $result?->fetchArray(SQLITE3_ASSOC)) {
+                    $columns[] = $row['name'] ?? '';
+                }
+
+                if (!in_array('events', $columns, true)
+                    && !$db->exec("ALTER TABLE clicks ADD COLUMN events TEXT DEFAULT '{}'")) {
+                    throw new Exception('Failed to add clicks.events: ' . $db->lastErrorMsg());
+                }
+
+                $migrationSql = [
+                    "CREATE TABLE IF NOT EXISTS click_event_log (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        clickid TEXT NOT NULL,
+                        time INTEGER NOT NULL,
+                        step_index INTEGER NOT NULL,
+                        event_name TEXT NOT NULL,
+                        event_value NUMERIC NOT NULL,
+                        FOREIGN KEY (clickid) REFERENCES clicks (clickid) ON DELETE CASCADE
+                    )",
+                    'CREATE INDEX IF NOT EXISTS idx_event_clickid_time ON click_event_log (clickid,time)',
+                    'CREATE INDEX IF NOT EXISTS idx_event_name_time ON click_event_log (event_name,time)',
+                    'PRAGMA user_version = ' . self::SCHEMA_VERSION,
+                ];
+                foreach ($migrationSql as $sql) {
+                    if (!$db->exec($sql)) {
+                        throw new Exception('Schema migration failed: ' . $db->lastErrorMsg());
+                    }
+                }
+            }
+
+            if (!$db->exec('COMMIT')) {
+                throw new Exception('Failed to commit schema migration: ' . $db->lastErrorMsg());
+            }
+            $transactionStarted = false;
+        } catch (Throwable $e) {
+            if ($transactionStarted) {
+                $db->exec('ROLLBACK');
+            }
+            throw $e;
+        } finally {
+            $db->close();
         }
-
-        if (!in_array('events', $columns, true)) {
-            $db->exec("ALTER TABLE clicks ADD COLUMN events TEXT DEFAULT '{}'");
-        }
-
-        $db->exec(
-            "CREATE TABLE IF NOT EXISTS click_event_log (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                clickid TEXT NOT NULL,
-                time INTEGER NOT NULL,
-                step_index INTEGER NOT NULL,
-                event_name TEXT NOT NULL,
-                event_value NUMERIC NOT NULL,
-                FOREIGN KEY (clickid) REFERENCES clicks (clickid) ON DELETE CASCADE
-            )"
-        );
-        $db->exec('CREATE INDEX IF NOT EXISTS idx_event_clickid_time ON click_event_log (clickid,time)');
-        $db->exec('CREATE INDEX IF NOT EXISTS idx_event_name_time ON click_event_log (event_name,time)');
-        $db->close();
     }
 
     private static function decode_click_row(array &$click): void
@@ -560,23 +596,46 @@ class Db
         }
 
         $db = new SQLite3($this->dbPath, $readOnly ? SQLITE3_OPEN_READONLY : SQLITE3_OPEN_READWRITE);
-        $db->busyTimeout(5000);
-
-        // Optimizations
-        $db->exec('PRAGMA foreign_keys = ON');
-        $db->exec('PRAGMA journal_mode = wal');
-        $db->exec('PRAGMA mmap_size = 268435456');    // 256MB memory mapping
-        $db->exec('PRAGMA cache_size = -64000');      // 64MB cache pages  
-        $db->exec('PRAGMA temp_store = MEMORY');      // temporary data in RAM
+        $this->configure_connection($db, $readOnly);
 
         if (!$readOnly) {
-            $db->exec('PRAGMA synchronous = OFF');    // only for writing
             $this->writeDb = $db;
         } else {
             $this->readDb = $db;
         }
 
         return $db;
+    }
+
+    private function configure_connection(SQLite3 $db, bool $readOnly): void
+    {
+        if (!$db->busyTimeout(self::SQLITE_BUSY_TIMEOUT_MS)) {
+            throw new RuntimeException('Failed to configure SQLite busy timeout');
+        }
+
+        $pragmas = [
+            'PRAGMA foreign_keys = ON',
+            'PRAGMA mmap_size = 268435456',
+            'PRAGMA cache_size = -64000',
+            'PRAGMA temp_store = MEMORY',
+        ];
+
+        if (!$readOnly) {
+            // WAL lets readers continue during a write. NORMAL keeps committed
+            // transactions durable without the data-loss risk of synchronous=OFF.
+            array_push(
+                $pragmas,
+                'PRAGMA journal_mode = WAL',
+                'PRAGMA synchronous = NORMAL',
+                'PRAGMA wal_autocheckpoint = 1000'
+            );
+        }
+
+        foreach ($pragmas as $pragma) {
+            if (!$db->exec($pragma)) {
+                throw new RuntimeException('Failed to configure SQLite connection: ' . $db->lastErrorMsg());
+            }
+        }
     }
     public function __destruct()
     {
@@ -1230,9 +1289,13 @@ class Db
             return false;
         }
 
+        $transactionStarted = false;
         try {
             $db = $this->open_db();
-            $db->exec('BEGIN IMMEDIATE');
+            if (!$db->exec('BEGIN IMMEDIATE')) {
+                throw new Exception('Failed to start click step transaction: ' . $db->lastErrorMsg());
+            }
+            $transactionStarted = true;
 
             $insertStmt = $db->prepare("INSERT OR IGNORE INTO click_steps (clickid, step, variant, time) VALUES (:clickid, :step, :variant, :time)");
             if ($insertStmt === false) {
@@ -1256,10 +1319,15 @@ class Db
                 throw new Exception('Failed to update click current step: ' . $db->lastErrorMsg());
             }
 
-            $db->exec('COMMIT');
+            if (!$db->exec('COMMIT')) {
+                throw new Exception('Failed to commit click step transaction: ' . $db->lastErrorMsg());
+            }
+            $transactionStarted = false;
             return true;
-        } catch (Exception $e) {
-            $this->writeDb?->exec('ROLLBACK');
+        } catch (Throwable $e) {
+            if ($transactionStarted) {
+                $this->writeDb?->exec('ROLLBACK');
+            }
             add_log('errors', $e->getMessage());
             return false;
         }
@@ -1336,8 +1404,12 @@ class Db
         }
 
         $db = $this->open_db();
+        $transactionStarted = false;
         try {
-            $db->exec('BEGIN IMMEDIATE');
+            if (!$db->exec('BEGIN IMMEDIATE')) {
+                throw new Exception('Failed to start click event transaction: ' . $db->lastErrorMsg());
+            }
+            $transactionStarted = true;
 
             $clickStmt = $db->prepare('SELECT id, step, events FROM clicks WHERE clickid = :clickid ORDER BY time DESC LIMIT 1');
             if ($clickStmt === false) {
@@ -1385,10 +1457,15 @@ class Db
                 throw new Exception('Failed to update click events: ' . $db->lastErrorMsg());
             }
 
-            $db->exec('COMMIT');
+            if (!$db->exec('COMMIT')) {
+                throw new Exception('Failed to commit click event transaction: ' . $db->lastErrorMsg());
+            }
+            $transactionStarted = false;
             return true;
-        } catch (Exception $e) {
-            $db->exec('ROLLBACK');
+        } catch (Throwable $e) {
+            if ($transactionStarted) {
+                $db->exec('ROLLBACK');
+            }
             add_log('errors', 'Failed to add click event: ' . $e->getMessage());
             return false;
         }
@@ -1444,17 +1521,18 @@ class Db
         if (!is_null($campId))
             $data["campaign_id"] = $campId;
 
-        $query = [];
-        if (!empty($_SERVER['QUERY_STRING'])) {
-            parse_str($_SERVER['QUERY_STRING'], $query);
-        }
+        // FiltrationCore has already parsed the visitor's original query string.
+        // This is also correct for remote PHP/API mode, where QUERY_STRING belongs
+        // to the API endpoint and the original parameters arrive in tds_qs.
+        $query = isset($data['qs']) && is_array($data['qs']) ? $data['qs'] : [];
 
         if (array_key_exists("cpc", $query)) {
             $data["cpc"] = $query["cpc"];
             unset($query["cpc"]);
         }
 
-        $data["params"] = json_encode($query);
+        $paramsJson = json_encode($query);
+        $data['params'] = $paramsJson === false ? '{}' : $paramsJson;
         return $data;
     }
 
@@ -1683,9 +1761,13 @@ class Db
 
     private function exec_write_query(string $query, array $p, bool $returnId = false): bool|int
     {
+        $transactionStarted = false;
         try {
             $db = $this->open_db();
-            $db->exec('BEGIN IMMEDIATE');
+            if (!$db->exec('BEGIN IMMEDIATE')) {
+                throw new Exception('Failed to start write transaction: ' . $db->lastErrorMsg());
+            }
+            $transactionStarted = true;
             $stmt = $db->prepare($query);
 
             if ($stmt === false) {
@@ -1706,11 +1788,16 @@ class Db
                 throw new Exception("Error executing $query: " . $db->lastErrorMsg());
             }
 
-            $db->exec('COMMIT');
+            if (!$db->exec('COMMIT')) {
+                throw new Exception('Failed to commit write transaction: ' . $db->lastErrorMsg());
+            }
+            $transactionStarted = false;
             add_log("trace", "Successfully executed $query");
             return $returnId ? $db->lastInsertRowID() : true;
-        } catch (Exception $e) {
-            $this->writeDb?->exec('ROLLBACK');
+        } catch (Throwable $e) {
+            if ($transactionStarted) {
+                $this->writeDb?->exec('ROLLBACK');
+            }
             add_log("errors", $e->getMessage());
             return false;
         }

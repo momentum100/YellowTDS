@@ -66,16 +66,16 @@ class FiltrationCore
         $dd->setCache(new DoctrineBridge($phpFileCache));
         $dd->parse();
         $clientInfo = $dd->getClient();
-        $a['client'] = $clientInfo['name'];
-        $a['clientver'] = $clientInfo['version'];
+        $a['client'] = (string)($clientInfo['name'] ?? '');
+        $a['clientver'] = (string)($clientInfo['version'] ?? '');
         DebugMethods::stop("YWBCoreDeviceDetector");
 
         $osInfo = $dd->getOs();
-        $a['os'] = $osInfo['name'];
-        $a['osver'] = $osInfo['version'];
-        $a['device'] = $dd->getDeviceName();
-        $a['brand'] = $dd->getBrandName();
-        $a['model'] = $dd->getModel();
+        $a['os'] = (string)($osInfo['name'] ?? '');
+        $a['osver'] = (string)($osInfo['version'] ?? '');
+        $a['device'] = (string)($dd->getDeviceName() ?? '');
+        $a['brand'] = (string)($dd->getBrandName() ?? '');
+        $a['model'] = (string)($dd->getModel() ?? '');
 
         DebugMethods::start("YWBCoreMaxMind");
         $a['ip'] = getip($prefill['tds_ip'] ?? $_SERVER);
@@ -134,7 +134,8 @@ class FiltrationCore
             'host'
         ];
         if (in_array($curParamName, $standardParams)) {
-            $paramValue = $this->click_params[$curParamName];
+            $paramKey = $curParamName === 'useragent' ? 'ua' : $curParamName;
+            $paramValue = (string)($this->click_params[$paramKey] ?? '');
             $check = $this->operator($val, $filter['operator'], $paramValue);
             if ($check) {
                 $this->matched_filters[] = $curParamName;

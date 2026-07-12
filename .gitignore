@@ -14,3 +14,18 @@ bases/*.mmdb
 bases/test.txt
 agents.md
 migrate_userid_clickid.php
+
+# Local Claude context — contains prod deploy secrets (server IP, SSH key path).
+# NEVER commit / never include in a PR to the upstream repo.
+CLAUDE.md
+/.claude/
+
+# Safety net: never commit private keys / certificates
+*.pem
+*.crt
+*.key
+*.ppk
+*.prv
+id_rsa
+id_rsa.*
+openssh.prv

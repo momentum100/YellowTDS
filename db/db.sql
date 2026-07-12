@@ -58,6 +58,8 @@ CREATE TABLE IF NOT EXISTS click_event_log (
 CREATE INDEX IF NOT EXISTS idx_event_clickid_time ON click_event_log (clickid,time);
 CREATE INDEX IF NOT EXISTS idx_event_name_time ON click_event_log (event_name,time);
 
+PRAGMA user_version = 1;
+
 CREATE INDEX IF NOT EXISTS idx_country ON clicks (country);
 CREATE INDEX IF NOT EXISTS idx_lang ON clicks (lang);
 CREATE INDEX IF NOT EXISTS idx_os ON clicks (os);
