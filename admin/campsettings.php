@@ -4,6 +4,18 @@ require_once __DIR__ . '/campinit.php';
 require_once __DIR__ . '/../paths.php';
 require_once __DIR__ . '/../abtest.php';
 global $c, $db, $campId;
+$streamCounts = $c->usesUnifiedStreams() ? $db->get_stream_counts($campId) : [];
+$campaignUrlBase = '';
+foreach ($c->domains as $campaignDomain) {
+    if ($campaignDomain !== '' && !str_contains($campaignDomain, '*')) {
+        $campaignUrlBase = 'https://' . $campaignDomain . '/';
+        break;
+    }
+}
+if ($campaignUrlBase === '') {
+    $campaignUrlBase = 'https://' . ($_SERVER['HTTP_HOST'] ?? 'domain.com') . '/';
+}
+$campaignPublicUrl = $campaignUrlBase . rawurlencode($c->publicId) . '/';
 ?>
 <!doctype html>
 <html lang="en">
@@ -17,10 +29,22 @@ global $c, $db, $campId;
         <div class="camp-layout">
             <nav class="camp-sidebar">
                 <div class="camp-name"><?= htmlspecialchars($campName) ?></div>
+                <div class="campaign-url-editor" data-base-url="<?= htmlspecialchars($campaignUrlBase) ?>" data-aliases="<?= htmlspecialchars(json_encode($c->publicIdAliases), ENT_QUOTES) ?>">
+                    <label for="campaign-public-slug">Campaign link</label>
+                    <input id="campaign-public-url" type="text" readonly value="<?= htmlspecialchars($campaignPublicUrl) ?>" title="<?= htmlspecialchars($campaignPublicUrl) ?>">
+                    <label for="campaign-public-slug" class="campaign-slug-label">URL slug <i class="bi bi-question-circle admin-info-icon" title="Saved only when you click Save settings. When the slug changes, every previous slug is kept as a working alias, so existing campaign links continue routing traffic. Aliases are never removed automatically."></i></label>
+                    <input id="campaign-public-slug" type="text" value="<?= htmlspecialchars($c->publicId) ?>" maxlength="63" spellcheck="false" autocomplete="off">
+                    <div class="campaign-url-actions">
+                        <button id="copy-campaign-url" type="button" class="btn btn-outline-secondary btn-sm"><i class="bi bi-clipboard"></i> Copy</button>
+                        <a id="open-campaign-url" class="btn btn-primary btn-sm" href="<?= htmlspecialchars($campaignPublicUrl) ?>" target="_blank" rel="noopener"><i class="bi bi-box-arrow-up-right"></i> Open</a>
+                    </div>
+                    <small id="campaign-slug-error" aria-live="polite"></small>
+                    <div id="campaign-url-aliases"></div>
+                </div>
                 <ul>
                     <li><a href="#sec-domains" class="active">Domains</a></li>
-                    <li><a href="#sec-safepage">Safe Page</a></li>
-                    <?php if ($c->white->domainFilterEnabled) foreach ($c->domains as $di => $domainName) { ?>
+                    <?php if (!$c->usesUnifiedStreams()) { ?><li><a href="#sec-safepage">Safe Page</a></li><?php } ?>
+                    <?php if (!$c->usesUnifiedStreams() && $c->white->domainFilterEnabled) foreach ($c->domains as $di => $domainName) { ?>
                     <li class="dws-nav-item" data-domain="<?= htmlspecialchars($domainName) ?>"><a href="#sec-dws-<?= $di ?>">&nbsp;&nbsp;<?= htmlspecialchars($domainName) ?></a></li>
                     <?php } ?>
                     <li><a href="#sec-flows">Flows</a></li>
@@ -37,6 +61,7 @@ global $c, $db, $campId;
             </nav>
             <div class="camp-content">
         <form id="campsettings" autocomplete="off">
+            <input type="hidden" name="publicid" value="<?= htmlspecialchars($c->publicId) ?>">
             <section id="sec-domains" class="camp-section active">
             <div class="form-group-inner">
             <div class="row">
@@ -323,18 +348,36 @@ global $c, $db, $campId;
 
             <section id="sec-flows" class="camp-section">
             <div class="form-group-inner">
-                <p>Flows are processed top-to-bottom. First flow whose filters match the visitor gets the traffic. Empty filters = catch-all.</p>
+                <?php if (!$c->usesUnifiedStreams()) { ?>
+                <div class="stream-migration-card">
+                    <h5>Upgrade to unified streams</h5>
+                    <p>All traffic will be routed through Forced, Regular and Default streams and recorded as normal clicks.</p>
+                    <button type="button" id="migrate-streams-btn" class="btn btn-primary">Upgrade campaign</button>
+                </div>
+                <?php } else { ?>
+                <input type="hidden" name="black.streamversion" value="2">
+                <p>Forced streams run first, then Regular streams. The locked Default stream catches all remaining traffic.</p>
+                <?php } ?>
                 <div id="flows-list">
                 <?php foreach ($c->black->flows as $fi => $flow) { ?>
-                    <div class="flow-list-row" data-flow-index="<?= $fi ?>">
-                        <input type="text" class="form-control flow-name-label" value="<?= htmlspecialchars($flow->name) ?>" readonly style="display:inline-block;width:200px;cursor:default;" />
-                        <a href="javascript:void(0)" class="btn btn-primary btn-sm flow-move-up" title="Move Up">&uarr;</a>
-                        <a href="javascript:void(0)" class="btn btn-primary btn-sm flow-move-down" title="Move Down">&darr;</a>
-                        <a href="javascript:void(0)" class="btn btn-danger btn-sm flow-delete" title="Delete"><i class="bi bi-trash"></i></a>
+                    <div class="flow-list-row <?= $flow->type === 'default' ? 'flow-default-row' : '' ?>" data-flow-index="<?= $fi ?>" data-stream-id="<?= htmlspecialchars($flow->id) ?>">
+                        <span class="flow-drag-handle" title="Drag to reorder"><?= $flow->type === 'default' ? '🔒' : '☰' ?></span>
+                        <label class="flow-enabled-toggle"><input type="checkbox" class="flow-enabled" <?= $flow->enabled ? 'checked' : '' ?> <?= $flow->type === 'default' ? 'disabled' : '' ?>> On</label>
+                        <select class="form-select flow-type" <?= $flow->type === 'default' ? 'disabled' : '' ?>>
+                            <option value="forced" <?= $flow->type === 'forced' ? 'selected' : '' ?>>Forced</option>
+                            <option value="regular" <?= $flow->type === 'regular' ? 'selected' : '' ?>>Regular</option>
+                            <option value="default" <?= $flow->type === 'default' ? 'selected' : '' ?>>Default</option>
+                        </select>
+                        <input type="text" class="form-control flow-name-label" value="<?= htmlspecialchars($flow->name) ?>" <?= $c->usesUnifiedStreams() ? '' : 'readonly' ?> />
+                        <?php $sc = $streamCounts[$flow->id] ?? ['clicks' => 0, 'uniques' => 0, 'flagged' => 0]; ?>
+                        <span class="flow-row-stats" title="Clicks / uniques / flagged"><?= (int)$sc['clicks'] ?> / <?= (int)$sc['uniques'] ?> / <?= (int)$sc['flagged'] ?></span>
+                        <code class="flow-short-id"><?= htmlspecialchars($flow->id) ?></code>
+                        <button type="button" class="btn btn-primary btn-sm flow-edit-stream">Edit</button>
+                        <?php if ($flow->type !== 'default') { ?><a href="javascript:void(0)" class="btn btn-danger btn-sm flow-delete" title="Delete"><i class="bi bi-trash"></i></a><?php } ?>
                     </div>
                 <?php } ?>
                 </div>
-                <a id="add-flow-btn" class="btn btn-primary" href="javascript:void(0)" style="margin-top:15px;display:inline-block;">+ Add Flow</a>
+                <?php if ($c->usesUnifiedStreams()) { ?><a id="add-flow-btn" class="btn btn-primary" href="javascript:void(0)" style="margin-top:15px;display:inline-block;">+ Add Stream</a><?php } ?>
             </div>
             <hr/>
             <div class="form-group-inner">
@@ -355,7 +398,7 @@ global $c, $db, $campId;
             </div>
 
             <?php $jbd = $c->black->jsBotDetection; ?>
-            <div class="flow-group">
+            <div class="flow-group flow-filter-group" style="display:<?= $flow->type === 'default' ? 'none' : '' ?>">
             <span class="flow-group-title">JS Bot Detection</span>
             <div class="form-group-inner">
                 <div class="row">
@@ -466,7 +509,7 @@ global $c, $db, $campId;
                     $isFunnel = $flow->hasMultipleSteps() && $flow->optimize_mode === 'funnels';
 
                     if ($isFunnel) {
-                        $stats = $db->get_funnel_stats($campId, $flow->name, $flow->optimize_for);
+                        $stats = $db->get_funnel_stats($campId, $flow->id ?: $flow->name, $flow->optimize_for);
                         $statsMap = [];
                         foreach ($stats as $row) {
                             $pathArr = json_decode($row['path'], true);
@@ -481,7 +524,7 @@ global $c, $db, $campId;
                         foreach ($flow->steps as $si => $step) {
                             $curItems = $step->getItems();
                             if (count($curItems) < 2) continue;
-                            $sStats = $db->get_variant_stats($campId, $flow->name, $si, $flow->optimize_for);
+                            $sStats = $db->get_variant_stats($campId, $flow->id ?: $flow->name, $si, $flow->optimize_for);
                             $sMap = [];
                             foreach ($sStats as $row) {
                                 if (!in_array($row['variant'], $curItems, true)) continue;
@@ -528,7 +571,7 @@ global $c, $db, $campId;
             </div>
             </div>
 
-            <?php $hasRedirect = false; foreach ($flow->steps as $s) { if ($s->action === 'redirect') { $hasRedirect = true; break; } } ?>
+            <?php $hasRedirect = false; foreach ($flow->steps as $s) { if (in_array($s->action, ['redirect', 'http404', 'nothing'], true)) { $hasRedirect = true; break; } } ?>
             <div class="flow-group">
             <span class="flow-group-title">Steps</span>
             <div id="steps-list-<?= $fi ?>" class="steps-list">
@@ -544,6 +587,10 @@ global $c, $db, $campId;
                             echo htmlspecialchars(implode(', ', $hosts));
                         } elseif ($step->action === 'redirect') {
                             echo 'redirect';
+                        } elseif ($step->action === 'http404') {
+                            echo '404 Not Found';
+                        } elseif ($step->action === 'nothing') {
+                            echo 'Do nothing';
                         } else {
                             echo count($step->folderNames) ? htmlspecialchars(implode(', ', $step->folderNames)) : 'empty';
                         }
@@ -574,9 +621,15 @@ global $c, $db, $campId;
                     <label class="ywb-radio-label">
                         <input type="radio" <?= ($step->action === 'redirect' && $isLast) ? 'checked' : '' ?> value="redirect" name="flow_<?= $fi ?>_step_<?= $si ?>_action" class="flow-step-action" data-fi="<?= $fi ?>" data-si="<?= $si ?>" <?= !$isLast ? 'disabled' : '' ?> /> Redirect(s)
                     </label>
+                    <label class="ywb-radio-label">
+                        <input type="radio" <?= ($step->action === 'http404' && $isLast) ? 'checked' : '' ?> value="http404" name="flow_<?= $fi ?>_step_<?= $si ?>_action" class="flow-step-action" data-fi="<?= $fi ?>" data-si="<?= $si ?>" <?= !$isLast ? 'disabled' : '' ?> /> 404 Not Found
+                    </label>
+                    <label class="ywb-radio-label">
+                        <input type="radio" <?= ($step->action === 'nothing' && $isLast) ? 'checked' : '' ?> value="nothing" name="flow_<?= $fi ?>_step_<?= $si ?>_action" class="flow-step-action" data-fi="<?= $fi ?>" data-si="<?= $si ?>" <?= !$isLast ? 'disabled' : '' ?> /> Do nothing (blank page)
+                    </label>
                 </div>
                 <?php if (!$isLast) { ?>
-                <p class="step-action-hint" style="font-size:12px;margin-top:6px;">Only the last step can use redirects.</p>
+                <p class="step-action-hint" style="font-size:12px;margin-top:6px;">Only the last step can use a terminal action.</p>
                 <?php } ?>
             </div>
             </div>
@@ -599,7 +652,12 @@ global $c, $db, $campId;
                 <?php } ?>
                 </div>
                 <a href="javascript:void(0)" class="btn btn-primary btn-sm flow-step-add-existing" data-fi="<?= $fi ?>" data-si="<?= $si ?>"><i class="bi bi-folder-symlink"></i> Add Existing</a>
-                <a href="javascript:void(0)" class="btn btn-info btn-sm flow-step-upload-zip" data-fi="<?= $fi ?>" data-si="<?= $si ?>"><i class="bi bi-upload"></i> Upload ZIP</a>
+                <div class="flow-zip-dropzone" data-fi="<?= $fi ?>" data-si="<?= $si ?>">
+                    <input type="file" class="flow-zip-input" accept=".zip,application/zip" aria-label="Choose ZIP archive">
+                    <i class="bi bi-file-earmark-zip"></i>
+                    <span class="flow-zip-dropzone-label">Drop ZIP here or click to choose</span>
+                    <small>index.html, index.htm, or index.php at archive root</small>
+                </div>
             </div>
             </div>
 
@@ -629,6 +687,8 @@ global $c, $db, $campId;
                                 <?php foreach ([301,302,303,307] as $rt) { ?>
                                 <option value="<?= $rt ?>" <?= $step->redirectType === $rt ? 'selected' : '' ?>><?= $rt ?></option>
                                 <?php } ?>
+                                <option value="meta" <?= $step->redirectType === 'meta' ? 'selected' : '' ?>>Meta refresh</option>
+                                <option value="js" <?= $step->redirectType === 'js' ? 'selected' : '' ?>>JavaScript</option>
                             </select>
                         </div>
                     </div>
@@ -1406,8 +1466,9 @@ global $c, $db, $campId;
     <script>window._dwsCounterInit = <?= count($c->domains) ?>;</script>
     <script type="module" src="js/campsettings/dws-sync.js"></script>
     <script type="module" src="js/campsettings/domains.js"></script>
-    <script type="module" src="js/campsettings/form-submit.js"></script>
-    <script src="js/filters.js"></script>
+    <script type="module" src="js/campsettings/campaign-url.js?v=<?=filemtime(__DIR__ . '/js/campsettings/campaign-url.js')?>"></script>
+    <script type="module" src="js/campsettings/form-submit.js?v=<?=filemtime(__DIR__ . '/js/campsettings/form-submit.js')?>"></script>
+    <script src="js/filters.js?v=<?=filemtime(__DIR__ . '/js/filters.js')?>"></script>
     <script>
         var rules_basic = <?=json_encode($c->white->filters)?>;
 
@@ -1497,8 +1558,8 @@ global $c, $db, $campId;
     <script src="js/cm6/php.min.js"></script>
     <script>window.CM6_PHP = cm6;</script>
     <script type="module" src="js/fileeditor.js"></script>
-    <script type="module" src="js/flows/index.js"></script>
-    <script type="module" src="js/campsettings-nav.js"></script>
+    <script type="module" src="js/flows/index.js?v=<?=filemtime(__DIR__ . '/js/flows/index.js')?>"></script>
+    <script type="module" src="js/campsettings-nav.js?v=<?=filemtime(__DIR__ . '/js/campsettings-nav.js')?>"></script>
 
     <!-- ── Flow templates (used by js/flows/ modules) ── -->
     <template id="tpl-folder-row">
@@ -1508,7 +1569,7 @@ global $c, $db, $campId;
             <div class="col-lg-2 flow-weight-col" style="display:none">
                 <input type="number" step="1" class="form-control" data-role="weight-input" value="" placeholder="%" style="width:70px" /></div>
             <div class="col-lg-3"><div class="btn-group btn-group-sm">
-                <a href="javascript:void(0)" class="btn btn-outline-secondary load-mode-btn" data-role="mode-btn" data-mode="base" data-modes="base,direct" title="Loading mode"><i class="bi bi-house-door"></i></a>
+                <a href="javascript:void(0)" class="btn btn-outline-secondary load-mode-btn" data-role="mode-btn" data-mode="direct" data-modes="base,direct" title="Loading mode"><i class="bi bi-hdd-network"></i></a>
                 <a href="javascript:void(0)" class="btn btn-warning flow-edit-folder" title="Edit files"><i class="bi bi-pencil-square"></i></a>
                 <a href="javascript:void(0)" class="btn btn-danger" data-role="remove-btn" title="Delete"><i class="bi bi-trash"></i></a>
             </div></div>
@@ -1575,6 +1636,8 @@ global $c, $db, $campId;
                 <label class="ywb-radio-label">
                     <input type="radio" value="redirect" name="flow___FI___step___SI___action" class="flow-step-action" data-fi="__FI__" data-si="__SI__" /> Redirect(s)
                 </label>
+                <label class="ywb-radio-label"><input type="radio" value="http404" name="flow___FI___step___SI___action" class="flow-step-action" data-fi="__FI__" data-si="__SI__" /> 404 Not Found</label>
+                <label class="ywb-radio-label"><input type="radio" value="nothing" name="flow___FI___step___SI___action" class="flow-step-action" data-fi="__FI__" data-si="__SI__" /> Do nothing</label>
             </div>
         </div></div>
 
@@ -1582,7 +1645,12 @@ global $c, $db, $campId;
         <div class="flow-group"><span class="flow-group-title">Folders</span>
             <div class="flow-step-folder-items"></div>
             <a href="javascript:void(0)" class="btn btn-primary btn-sm flow-step-add-existing" data-fi="__FI__" data-si="__SI__"><i class="bi bi-folder-symlink"></i> Add Existing</a>
-            <a href="javascript:void(0)" class="btn btn-info btn-sm flow-step-upload-zip" data-fi="__FI__" data-si="__SI__"><i class="bi bi-upload"></i> Upload ZIP</a>
+            <div class="flow-zip-dropzone" data-fi="__FI__" data-si="__SI__">
+                <input type="file" class="flow-zip-input" accept=".zip,application/zip" aria-label="Choose ZIP archive">
+                <i class="bi bi-file-earmark-zip"></i>
+                <span class="flow-zip-dropzone-label">Drop ZIP here or click to choose</span>
+                <small>index.html, index.htm, or index.php at archive root</small>
+            </div>
         </div></div>
 
         <div class="flow-step-redirects" style="display:none">
@@ -1592,7 +1660,7 @@ global $c, $db, $campId;
             <div class="form-group-inner" style="margin-top:10px"><div class="row">
                 <div class="col-lg-3"><label class="login2 pull-left pull-left-pro">Redirect type:</label></div>
                 <div class="col-lg-3"><select class="form-select flow-step-redirect-type" data-fi="__FI__" data-si="__SI__">
-                    <option value="301">301</option><option value="302" selected>302</option><option value="303">303</option><option value="307">307</option>
+                    <option value="301">301</option><option value="302" selected>302</option><option value="303">303</option><option value="307">307</option><option value="meta">Meta refresh</option><option value="js">JavaScript</option>
                 </select></div></div></div>
         </div></div>
 

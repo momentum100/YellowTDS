@@ -5,9 +5,9 @@ class CloakerAction
     public string $click_type;
     public string $action;
     public string $value;
-    public int $redirect_type;
+    public int|string $redirect_type;
     
-    public function __construct(string $click_type, string $action, string $value, int $redirect_type=0)
+    public function __construct(string $click_type, string $action, string $value, int|string $redirect_type=0)
     {
         $this->click_type = $click_type;
         $this->action = $action;
@@ -21,7 +21,15 @@ class CloakerAction
                 echo $this->value;
                 break;
             case 'redirect':
-                redirect($this->value,$this->redirect_type,true);
+                if ($this->redirect_type === 'meta') {
+                    $url = htmlspecialchars($this->value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+                    echo '<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=' . $url . '">';
+                } elseif ($this->redirect_type === 'js') {
+                    $url = json_encode($this->value, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+                    echo '<!doctype html><meta charset="utf-8"><script>location.replace(' . $url . ');</script>';
+                } else {
+                    redirect($this->value, (int)$this->redirect_type, true);
+                }
                 break;
             case 'error':
                 http_response_code($this->value);

@@ -5,6 +5,8 @@
     "localhost:48960"
   ],
   "apikey": "test",
+  "publicid": "",
+  "publicidaliases": [],
   "saveuserflow": false,
   "white": {
     "action": "error",

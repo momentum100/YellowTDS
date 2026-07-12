@@ -43,19 +43,6 @@ function get_next_step_url(string $clickid, int $stepIndex): string
     return $cloaker . 'next.php?' . http_build_query(['clickid' => $clickid, 'step' => $stepIndex]);
 }
 
-function get_directload_step_url(string $clickid, int $stepIndex, string $relativePath = ''): string
-{
-    $cloaker = get_cloaker_relative_path();
-    $base = $cloaker . '__dl/' . rawurlencode($clickid) . '/' . $stepIndex . '/';
-    $relativePath = ltrim($relativePath, '/');
-    if ($relativePath === '') {
-        return $base;
-    }
-
-    $parts = array_filter(explode('/', $relativePath), fn($p) => $p !== '');
-    return $base . implode('/', array_map('rawurlencode', $parts));
-}
-
 function build_send_action_url(string $originalAction, string $clickid, string $folderName): string
 {
     $cloaker = get_cloaker_relative_path();
@@ -86,7 +73,7 @@ function get_cloaker_relative_path(): string
     return $path;
 }
 
-function load_step(Campaign $c, FlowSettings $flow, int $stepIndex, string $folderName, string $clickid, bool $directLoad = false, string $relativePath = ''): string
+function load_step(Campaign $c, FlowSettings $flow, int $stepIndex, string $folderName, string $clickid, bool $directLoad = false, string $relativePath = '', string $routeBase = ''): string
 {
     if (!isset($flow->steps[$stepIndex])) {
         return '';
@@ -104,9 +91,14 @@ function load_step(Campaign $c, FlowSettings $flow, int $stepIndex, string $fold
     $html = remove_scrapbook($html);
 
     if ($directLoad) {
-        $directBase = get_directload_step_url($clickid, $stepIndex);
-        $html = fix_head_add_base($html, $directBase);
+        if ($routeBase === '') {
+            throw new RuntimeException('Configuration error: campaign route base is required for direct landing mode');
+        }
+        $directBase = $routeBase;
         $html = fix_root_relative_urls($html);
+        // Add the campaign base after rewriting the landing's own
+        // root-relative URLs so the route itself is never rewritten.
+        $html = fix_head_add_base($html, $directBase);
     } else {
         $fullpath = get_abs_from_rel($basePath);
         $html = fix_head_add_base($html, $fullpath);

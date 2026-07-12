@@ -30,9 +30,10 @@ $settings = $db->get_campaign_settings($campId);
 $c = new Campaign($campId, $settings);
 
 $flowName = (string)($click['flow'] ?? '');
+$flowId = (string)($click['flow_id'] ?? '');
 $flow = null;
 foreach ($c->black->flows as $f) {
-    if ($f->name === $flowName) {
+    if (($flowId !== '' && $f->id === $flowId) || ($flowId === '' && $f->name === $flowName)) {
         $flow = $f;
         break;
     }
@@ -88,7 +89,8 @@ if ($stepSettings->isRedirect()) {
 }
 
 if ($stepSettings->isDirectLoad($chosenVariant)) {
-    redirect(get_directload_step_url($clickid, $nextStep), 302, false);
+    set_campaign_route_context($c->publicId, $clickid, $nextStep, true);
+    redirect(get_campaign_route_url($c->publicId), 302, false);
     return;
 }
 

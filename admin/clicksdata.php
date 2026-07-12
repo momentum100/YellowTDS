@@ -24,6 +24,7 @@ if ($view === 'trafficback') {
     require_once __DIR__ . '/campinit.php';
     global $db, $c;
     $tz = $c->statistics->timezone;
+    if ($c->usesUnifiedStreams()) $view = 'allowed';
 }
 
 $timeRange = Dates::get_time_range($tz);

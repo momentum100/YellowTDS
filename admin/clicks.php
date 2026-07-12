@@ -26,6 +26,10 @@ $allowedViews = ['allowed', 'blocked', 'leads', 'trafficback'];
 if (!in_array($view, $allowedViews, true)) {
     $view = 'allowed';
 }
+$unifiedStreams = isset($c) && $c->usesUnifiedStreams();
+if ($unifiedStreams && $view !== 'trafficback') {
+    $view = 'allowed';
+}
 $defaults = json_decode(file_get_contents(__DIR__ . '/../db/default.json'), true)['statistics'] ?? [];
 switch ($view) {
     case 'trafficback':
@@ -86,7 +90,7 @@ $ajaxUrl = 'clicksdata.php?' . http_build_query($ajaxParams);
     <div class="all-content-wrapper">
         <div class="buttons-block" style="display: flex; justify-content: space-between; align-items: center;">
             <div style="display:flex; align-items:flex-end; gap: 12px;">
-            <?php if ($view !== 'trafficback'):?>
+            <?php if ($view !== 'trafficback' && !$unifiedStreams):?>
                 <span style="display: inline-block;">
                     <label for="viewSelector" style="color: white; font-weight: bold;">View:</label>
                     <select id="viewSelector" class="form-select" style="width: 140px; display: inline-block; margin-left: 10px;">

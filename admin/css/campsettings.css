@@ -30,6 +30,94 @@
     text-overflow: ellipsis;
 }
 
+.campaign-url-editor {
+    padding: 12px 14px 14px;
+    border-bottom: 1px solid #2a3f6a;
+}
+
+.campaign-url-editor > label {
+    display: block;
+    margin-bottom: 5px;
+    color: #aebddb;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+}
+
+.campaign-url-editor .campaign-slug-label {
+    margin-top: 10px;
+}
+
+.campaign-url-editor input {
+    box-sizing: border-box;
+    width: 100%;
+    height: 32px;
+    padding: 6px 8px;
+    border: 1px solid #3b4f76;
+    border-radius: 5px;
+    background: #0f192d;
+    color: #e7efff;
+    font-size: 12px;
+}
+
+#campaign-public-url {
+    color: #8eb9ff;
+    text-overflow: ellipsis;
+}
+
+.campaign-url-editor input.is-invalid {
+    border-color: #ef5350;
+}
+
+.campaign-url-actions {
+    display: flex;
+    gap: 7px;
+    margin-top: 9px;
+}
+
+.campaign-url-actions .btn {
+    flex: 1;
+    padding: 5px 7px;
+    font-size: 11px;
+}
+
+#campaign-slug-error {
+    display: block;
+    min-height: 15px;
+    margin-top: 5px;
+    color: #ff8b88;
+    font-size: 10px;
+    line-height: 1.3;
+}
+
+#campaign-url-aliases {
+    margin-top: 4px;
+}
+
+.campaign-aliases-title {
+    margin: 7px 0 3px;
+    color: #aebddb;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+#campaign-url-aliases a {
+    display: block;
+    padding: 2px 0;
+    overflow: hidden;
+    color: #7faaf0;
+    font-size: 10px;
+    text-decoration: none;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+#campaign-url-aliases a:hover {
+    color: #fff;
+}
+
 .camp-sidebar ul {
     list-style: none;
     margin: 0;
@@ -548,4 +636,103 @@
     font-family: "bootstrap-icons";
     content: "\f5de";
     font-size: 14px;
+}
+
+.stream-migration-card {
+    padding: 18px;
+    margin-bottom: 18px;
+    border: 1px solid #31558b;
+    border-radius: 10px;
+    background: #17243a;
+}
+
+.flow-list-row {
+    display: grid;
+    grid-template-columns: 28px 66px 110px minmax(180px, 1fr) 110px 110px 64px 42px;
+    gap: 10px;
+    align-items: center;
+    padding: 10px;
+    margin-bottom: 7px;
+    border: 1px solid #2b3b57;
+    border-radius: 8px;
+    background: #172238;
+}
+
+.flow-list-row.flow-default-row { border-color: #a57624; background: #292619; }
+.flow-drag-handle { color: #90a4c3; cursor: grab; font-size: 18px; text-align: center; }
+.flow-default-row .flow-drag-handle { cursor: default; font-size: 14px; }
+.flow-enabled-toggle { margin: 0; color: #c8d2e3; white-space: nowrap; }
+.flow-type { min-width: 100px; }
+.flow-name-label { width: 100% !important; }
+.flow-short-id { color: #8297b7; font-size: 11px; white-space: nowrap; }
+.flow-row-stats { color: #8fa3c1; font-size: 12px; white-space: nowrap; text-align: center; }
+.flow-zip-dropzone {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    min-height: 112px;
+    margin-top: 14px;
+    padding: 18px;
+    border: 2px dashed #9aa8b5;
+    border-radius: 8px;
+    background: #f8fafc;
+    color: #415466;
+    cursor: pointer;
+    text-align: center;
+    transition: border-color .15s ease, background-color .15s ease, color .15s ease;
+}
+
+.flow-zip-dropzone:hover,
+.flow-zip-dropzone:focus-within,
+.flow-zip-dropzone.is-dragover {
+    border-color: #0d6efd;
+    background: #eef5ff;
+    color: #0d6efd;
+    outline: none;
+}
+
+.flow-zip-dropzone.is-uploading {
+    pointer-events: none;
+    opacity: .7;
+}
+
+.flow-zip-dropzone > i {
+    font-size: 28px;
+}
+
+.flow-zip-input {
+    position: relative;
+    z-index: 2;
+    width: 320px;
+    max-width: 100%;
+    min-height: 40px;
+    flex: 0 0 40px;
+    opacity: 1;
+    color: #6c757d;
+    cursor: pointer;
+    appearance: auto !important;
+    -webkit-appearance: auto !important;
+    border: initial;
+    padding: initial;
+}
+
+.flow-zip-input::file-selector-button {
+    margin-right: 10px;
+    padding: 7px 12px;
+    border: 1px solid #0d6efd;
+    border-radius: 5px;
+    background: #0d6efd;
+    color: #fff;
+    cursor: pointer;
+}
+
+.flow-zip-dropzone-label {
+    font-weight: 600;
+}
+
+.flow-zip-dropzone small {
+    color: #6c757d;
 }

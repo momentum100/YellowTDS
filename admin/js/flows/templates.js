@@ -183,10 +183,10 @@ export function updateLastStepToggle(fi) {
         sec.querySelectorAll('.flow-step-action').forEach(function (radio) {
             radio.disabled = !isLast;
         });
-        // If not last and currently set to redirect, force back to folder
+        // Only the last step may be terminal; earlier steps must serve a folder.
         if (!isLast) {
             var checkedRadio = sec.querySelector('.flow-step-action:checked');
-            if (checkedRadio && checkedRadio.value === 'redirect') {
+            if (checkedRadio && checkedRadio.value !== 'folder') {
                 var folderRadio = sec.querySelector('.flow-step-action[value="folder"]');
                 if (folderRadio) folderRadio.checked = true;
                 var folders = sec.querySelector('.flow-step-folders');
@@ -203,7 +203,7 @@ export function updateLastStepToggle(fi) {
                 var p = document.createElement('p');
                 p.className = 'step-action-hint';
                 p.style.cssText = 'font-size:12px;margin-top:6px;';
-                p.textContent = 'Only the last step can use redirects.';
+                p.textContent = 'Only the last step can use a terminal action.';
                 actionGroup.appendChild(p);
             }
         } else {
@@ -232,12 +232,14 @@ export function updateStepListInfo(fi, si) {
             }
         });
         infoEl.textContent = hosts.length ? hosts.join(', ') : 'redirect';
-    } else {
+    } else if (action === 'folder') {
         var folders = [];
         stepSec.querySelectorAll('.flow-step-folder').forEach(function (inp) {
             if (inp.value.trim()) folders.push(inp.value.trim());
         });
         infoEl.textContent = folders.length ? folders.join(', ') : 'empty';
+    } else {
+        infoEl.textContent = action === 'http404' ? '404 Not Found' : 'Do nothing';
     }
 }
 

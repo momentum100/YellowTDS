@@ -131,7 +131,8 @@ class FiltrationCore
             'isp',
             'referer',
             'domain',
-            'host'
+            'host',
+            'reason'
         ];
         if (in_array($curParamName, $standardParams)) {
             $paramKey = $curParamName === 'useragent' ? 'ua' : $curParamName;
@@ -178,7 +179,7 @@ class FiltrationCore
         return false;
     }
 
-    private function operator(string $val, string $operator, string $paramValue): bool
+    private function operator(string|array $val, string $operator, string $paramValue): bool
     {
         $check = true;
         switch ($operator) {
@@ -224,16 +225,16 @@ class FiltrationCore
                 }
                 break;
             case 'less_or_equal':
-                $check = version_compare($paramValue, $val, '<=');
+                $check = version_compare($paramValue, (string)$val, '<=');
                 break;
             case 'greater_or_equal':
-                $check = version_compare($paramValue, $val, '>=');
+                $check = version_compare($paramValue, (string)$val, '>=');
                 break;
             case 'equal':
-                $check = strtolower($paramValue) === strtolower($val);
+                $check = strtolower($paramValue) === strtolower((string)$val);
                 break;
             case 'not_equal':
-                $check = strtolower($paramValue) !== strtolower($val);
+                $check = strtolower($paramValue) !== strtolower((string)$val);
                 break;
             default:
                 die("Operator $operator is not defined!");
@@ -251,9 +252,9 @@ class FiltrationCore
         return false;
     }
 
-    private function split_filter_values(string $val): array
+    private function split_filter_values(string|array $val): array
     {
-        return array_map('trim', explode(',', $val));
+        return array_map(fn($item) => trim((string)$item), is_array($val) ? $val : explode(',', $val));
     }
 
     private function match_url_param_filter(array $filter): bool

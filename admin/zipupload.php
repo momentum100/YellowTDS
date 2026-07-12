@@ -1,6 +1,6 @@
 <?php
-@ini_set('upload_max_filesize', '256M');
-@ini_set('post_max_size', '256M');
+// upload_max_filesize and post_max_size must be configured in PHP-FPM;
+// runtime ini_set() calls cannot raise these PHP_INI_PERDIR limits.
 @ini_set('max_execution_time', '300');
 @ini_set('display_errors', '0');
 error_reporting(0);
@@ -107,7 +107,8 @@ for ($i = 0; $i < $zip->numFiles; $i++) {
 $rootDirs = array_keys($rootDirs);
 
 // Determine extraction mode
-$hasRootIndex = in_array('index.php', $rootFiles) || in_array('index.html', $rootFiles);
+$indexNames = ['index.php', 'index.html', 'index.htm'];
+$hasRootIndex = count(array_intersect($indexNames, $rootFiles)) > 0;
 $singleDirMode = false;
 $singleDirName = '';
 
@@ -115,11 +116,11 @@ if (!$hasRootIndex) {
     // Check if there's exactly one root directory
     if (count($rootDirs) === 1 && count($rootFiles) === 0) {
         $singleDirName = $rootDirs[0];
-        // Check if index.php or index.html exists inside that directory
+        // Check if a supported index file exists inside that directory
         $hasInnerIndex = false;
         for ($i = 0; $i < $zip->numFiles; $i++) {
             $name = $zip->getNameIndex($i);
-            if ($name === $singleDirName . '/index.php' || $name === $singleDirName . '/index.html') {
+            if (in_array($name, array_map(fn($indexName) => $singleDirName . '/' . $indexName, $indexNames), true)) {
                 $hasInnerIndex = true;
                 break;
             }
@@ -128,11 +129,11 @@ if (!$hasRootIndex) {
             $singleDirMode = true;
         } else {
             $zip->close();
-            zip_error('ZIP invalid: the folder "' . $singleDirName . '" does not contain index.php or index.html');
+            zip_error('ZIP invalid: the folder "' . $singleDirName . '" must contain index.html, index.htm, or index.php');
         }
     } else {
         $zip->close();
-        zip_error('ZIP invalid: no index.php or index.html found at root level');
+        zip_error('ZIP invalid: index.html, index.htm, or index.php must be at the archive root');
     }
 }
 

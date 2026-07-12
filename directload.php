@@ -2,6 +2,7 @@
 // ── Direct Load: serve landing/white resources via 404 catch-all ──
 // Included from index.php. Expects settings.php and cookies.php already loaded.
 require_once __DIR__ . '/paths.php';
+require_once __DIR__ . '/campaignroute.php';
 
 global $cloSettings;
 
@@ -104,15 +105,8 @@ function dl_not_found(string $message = 'Not Found'): void
     exit();
 }
 
-function dl_handle_black_step_route(string $reqPath, array $mimeTypes): bool
+function dl_serve_black_context(string $clickid, int $stepIndex, string $innerPath, array $mimeTypes, string $routeBase = '', string $expectedPublicId = ''): void
 {
-    if (!preg_match('#^__dl/([^/]+)/([0-9]+)(?:/(.*))?$#', $reqPath, $m)) {
-        return false;
-    }
-
-    $clickid = rawurldecode($m[1]);
-    $stepIndex = (int)$m[2];
-    $innerPath = trim(rawurldecode((string)($m[3] ?? '')), '/');
     if (str_contains($innerPath, '..')) {
         dl_not_found('Invalid path');
     }
@@ -144,10 +138,14 @@ function dl_handle_black_step_route(string $reqPath, array $mimeTypes): bool
         dl_not_found('Campaign not found');
     }
     $campaign = new Campaign($campId, $settings);
+    if ($expectedPublicId !== '' && !$campaign->acceptsPublicId($expectedPublicId)) {
+        dl_not_found('Campaign route mismatch');
+    }
 
     $flow = null;
+    $clickFlowId = (string)($click['flow_id'] ?? '');
     foreach ($campaign->black->flows as $f) {
-        if ($f->name === ($click['flow'] ?? '')) {
+        if (($clickFlowId !== '' && $f->id === $clickFlowId) || ($clickFlowId === '' && $f->name === ($click['flow'] ?? ''))) {
             $flow = $f;
             break;
         }
@@ -179,7 +177,7 @@ function dl_handle_black_step_route(string $reqPath, array $mimeTypes): bool
     }
 
     if ($innerPath === '') {
-        echo load_step($campaign, $flow, $stepIndex, $variant, $clickid, true);
+        echo load_step($campaign, $flow, $stepIndex, $variant, $clickid, true, '', $routeBase);
         exit();
     }
 
@@ -189,7 +187,7 @@ function dl_handle_black_step_route(string $reqPath, array $mimeTypes): bool
     }
 
     if (is_dir($candidate)) {
-        echo load_step($campaign, $flow, $stepIndex, $variant, $clickid, true, $innerPath);
+        echo load_step($campaign, $flow, $stepIndex, $variant, $clickid, true, $innerPath, $routeBase);
         exit();
     }
     if (!is_file($candidate)) {
@@ -198,18 +196,56 @@ function dl_handle_black_step_route(string $reqPath, array $mimeTypes): bool
 
     $ext = strtolower(pathinfo($candidate, PATHINFO_EXTENSION));
     if (in_array($ext, ['php', 'html', 'htm'], true)) {
-        echo load_step($campaign, $flow, $stepIndex, $variant, $clickid, true, $innerPath);
+        echo load_step($campaign, $flow, $stepIndex, $variant, $clickid, true, $innerPath, $routeBase);
         exit();
     }
 
     dl_send_static_file($candidate, $mimeTypes);
+}
+
+function dl_handle_campaign_route(array $mimeTypes): bool
+{
+    $route = get_campaign_request_route();
+    if ($route === null) {
+        return false;
+    }
+
+    $publicId = $route['public_id'];
+    $innerPath = $route['relative_path'];
+    $context = get_campaign_route_context($publicId);
+    if (empty($context['clickid'])) {
+        if ($innerPath !== '') {
+            dl_not_found('Landing session expired');
+        }
+        return false;
+    }
+
+    if ($innerPath === '') {
+        if (empty($context['root_once'])) {
+            return false;
+        }
+        consume_campaign_route_root($publicId);
+    }
+
+    dl_serve_black_context(
+        (string)$context['clickid'],
+        (int)($context['step'] ?? 0),
+        $innerPath,
+        $mimeTypes,
+        get_campaign_route_base($publicId),
+        $publicId
+    );
 
     return true;
 }
 
 $reqPath = dl_get_req_path();
 
-if (dl_handle_black_step_route($reqPath, $dlMimeTypes)) {
+if ($reqPath === '__dl' || str_starts_with($reqPath, '__dl/')) {
+    dl_not_found();
+}
+
+if (dl_handle_campaign_route($dlMimeTypes)) {
     return;
 }
 
@@ -225,8 +261,6 @@ if (empty($dlMode)) {
 // Skip root, admin, js, and existing cloaker files
 $isCloakerFile = file_exists(__DIR__ . '/' . $reqPath) && !is_dir(__DIR__ . '/' . $reqPath);
 if ($reqPath !== '' && !is_admin_request_path($reqPath) && !str_starts_with($reqPath, 'js/') && !$isCloakerFile) {
-
-    // Black directload is handled only via __dl/<clickid>/<step>/... route above.
 
     // ── White folder direct load
     if ($dlMode === 'white') {
