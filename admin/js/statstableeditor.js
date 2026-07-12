@@ -75,21 +75,21 @@ function initializeStatsTableEditor(availableColumns, selectedMetrics, available
 
     document.getElementById('saveTableBtn').onclick = async () => {
         const name = tableNameInput.value.trim();
-        if (!name) { alert('Please enter a table name'); return; }
+        if (!name) { notify('Please enter a table name', 'error'); return; }
 
         const columns = collectSelectedMetricConfigs();
-        if (!columns.length) { alert('Please select at least one metric column'); return; }
+        if (!columns.length) { notify('Please select at least one metric column', 'error'); return; }
 
         const invalidCustom = getInvalidCustomColumns(columns.filter((c) => typeof c === 'object' && c.custom));
         if (invalidCustom.length) {
-            alert('Please fix custom columns: ' + invalidCustom.join(', '));
+            notify('Please fix custom columns: ' + invalidCustom.join(', '), 'error');
             return;
         }
 
         const groupby = getSelectedItems('dimensionsColumns');
-        if (!groupby.length) { alert('Please select at least one dimension for grouping'); return; }
+        if (!groupby.length) { notify('Please select at least one dimension for grouping', 'error'); return; }
         if (groupby.length > MAX_GROUPBY_SELECTIONS) {
-            alert(`You can select at most ${MAX_GROUPBY_SELECTIONS} dimensions for grouping`);
+            notify(`You can select at most ${MAX_GROUPBY_SELECTIONS} dimensions for grouping`, 'error');
             return;
         }
 
@@ -108,7 +108,7 @@ function initializeStatsTableEditor(availableColumns, selectedMetrics, available
             if (data.error) throw new Error(data.msg || data.result || 'Save failed');
             window.location.reload();
         } catch (err) {
-            alert('Error saving table: ' + err.message);
+            notify('Error saving table: ' + err.message, 'error');
         }
     };
 
@@ -130,7 +130,7 @@ function toggleCustomColumnsModal(show) {
 }
 
 async function deleteStatsTable(tableName, deleteUrl) {
-    if (!confirm(`Are you sure you want to delete table "${tableName}"?`)) return;
+    if (!(await window.confirmDialog(`Are you sure you want to delete table "${tableName}"?`))) return;
     try {
         const res = await fetch(deleteUrl, {
             method: 'POST',
@@ -147,7 +147,7 @@ async function deleteStatsTable(tableName, deleteUrl) {
             window.location.reload();
         }
     } catch (err) {
-        alert('Error deleting table: ' + err.message);
+        notify('Error deleting table: ' + err.message, 'error');
     }
 }
 
@@ -255,12 +255,12 @@ function collectSelectedMetricConfigs() {
         });
 }
 
-function handleAddParamDimension(e) {
+async function handleAddParamDimension(e) {
     if (!e.target.closest('#addParamDimension')) return;
     const MAX_GROUPBY_SELECTIONS = 3;
     const total = qsa('#dimensionsColumns input[type="checkbox"]:checked').length;
     if (total >= MAX_GROUPBY_SELECTIONS) return;
-    const name = prompt('URL param name:');
+    const name = await window.promptDialog('URL param name:');
     if (!name || !name.trim()) return;
     const clean = name.trim().replace(/[^a-zA-Z0-9_]/g, '');
     if (!clean) return;

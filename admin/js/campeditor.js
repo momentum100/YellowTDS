@@ -22,7 +22,7 @@ async function campEditor(action, campId=null, name=null) {
     });
     let js = await res.json();
     if (js.error)
-        alert(`An error occured: ${js.result}`);
+        notify(`An error occured: ${js.result}`, 'error');
     else
         window.location.reload();
 }
@@ -71,19 +71,19 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (menuItem.classList.contains('btn-rename')) {
             const currentName = campaignName ?? '';
-            const newName = prompt("Enter new campaign name:", currentName);
+            const newName = await window.promptDialog("Enter new campaign name:", currentName);
             if (newName == null) return;
             const trimmedName = newName.trim();
             if (trimmedName) {
                 await campEditor('ren', campaignId, trimmedName);
             } else {
-                alert('Campaign name can not be empty!');
+                notify('Campaign name can not be empty!', 'error');
             }
             return;
         }
 
         if (menuItem.classList.contains('btn-delete')) {
-            if (confirm(`Are you sure? Going to delete campaign ${campaignName}.`)) {
+            if (await window.confirmDialog(`Are you sure? Going to delete campaign ${campaignName}.`)) {
                 await campEditor('del', campaignId);
             }
             return;
@@ -91,11 +91,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (menuItem.classList.contains('btn-clone')) {
             const defaultCloneName = `${campaignName ?? ''} (Clone)`;
-            const newName = prompt("Enter cloned campaign name:", defaultCloneName);
+            const newName = await window.promptDialog("Enter cloned campaign name:", defaultCloneName);
             if (newName == null) return;
             const trimmedName = newName.trim();
             if (!trimmedName) {
-                alert('Campaign name can not be empty!');
+                notify('Campaign name can not be empty!', 'error');
                 return;
             }
             await campEditor('dup', campaignId, trimmedName);

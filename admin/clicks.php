@@ -164,7 +164,7 @@ $ajaxUrl = 'clicksdata.php?' . http_build_query($ajaxParams);
                         body: JSON.stringify({ columns: <?= json_encode(array_map(fn($c) => is_array($c) ? $c['field'] : $c, $tableColumns)) ?>, filters: {} })
                     });
                     window.location.reload();
-                } catch(e) { alert('Error resetting filters: ' + e.message); }
+                } catch(e) { notify('Error resetting filters: ' + e.message, 'error'); }
             });
             
             let t<?=$tName?>Columns = <?=$tColumns?>;

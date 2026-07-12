@@ -20,15 +20,15 @@ export function handleZipUpload(btn) {
     fileInput.style.display = 'none';
     document.body.appendChild(fileInput);
 
-    fileInput.addEventListener('change', function () {
+    fileInput.addEventListener('change', async function () {
         if (!fileInput.files.length) { fileInput.remove(); return; }
         var file = fileInput.files[0];
 
-        var folderName = prompt('Enter folder name for uploaded files:');
+        var folderName = await window.promptDialog('Enter folder name for uploaded files:');
         if (!folderName || !folderName.trim()) { fileInput.remove(); return; }
         folderName = folderName.trim();
         if (!/^[a-zA-Z0-9_\-\.]+$/.test(folderName)) {
-            alert('Invalid folder name. Use only letters, numbers, hyphens, underscores, dots.');
+            notify('Invalid folder name. Use only letters, numbers, hyphens, underscores, dots.', 'error');
             fileInput.remove();
             return;
         }
@@ -44,7 +44,7 @@ export function handleZipUpload(btn) {
             .then(function (r) { return r.json(); })
             .then(function (data) {
                 if (data.error) {
-                    alert('Upload error: ' + data.result);
+                    notify('Upload error: ' + data.result, 'error');
                 } else {
                     container.appendChild(buildFolderRow(data.folder, showWeight));
                     if (showWeight) {
@@ -52,7 +52,7 @@ export function handleZipUpload(btn) {
                     }
                 }
             })
-            .catch(function (err) { alert('Upload failed: ' + err); })
+            .catch(function (err) { notify('Upload failed: ' + err, 'error'); })
             .finally(function () {
                 btn.innerHTML = '<i class="bi bi-upload"></i> Upload ZIP';
                 btn.style.pointerEvents = '';

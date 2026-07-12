@@ -49,8 +49,8 @@ document.addEventListener('click', function (e) {
 });
 
 // Add domain
-document.getElementById('add-domain-item')?.addEventListener('click', function () {
-    var domain = prompt('Enter domain (without http(s)://):');
+document.getElementById('add-domain-item')?.addEventListener('click', async function () {
+    var domain = await window.promptDialog('Enter domain (without http(s)://):');
     if (!domain || !domain.trim()) return;
     domain = domain.trim().replace(/^https?:\/\//i, '').replace(/\/+$/, '');
     if (!domain) return;
@@ -59,7 +59,7 @@ document.getElementById('add-domain-item')?.addEventListener('click', function (
     var existing = document.querySelectorAll('#domains_container .domain-name');
     for (var i = 0; i < existing.length; i++) {
         if (existing[i].value.trim().toLowerCase() === domain.toLowerCase()) {
-            alert('Domain "' + domain + '" is already added.');
+            notify('Domain "' + domain + '" is already added.', 'error');
             return;
         }
     }

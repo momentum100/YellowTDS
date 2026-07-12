@@ -328,7 +328,7 @@ if (count($ss->tables)>0){
         document.getElementById('shareStatsConfirm').onclick = async () => {
             const targetCampIds = [...document.querySelectorAll('.share-camp-checkbox:checked')].map(cb => parseInt(cb.value, 10)).filter(Boolean);
             if (targetCampIds.length === 0) {
-                alert('Select at least one campaign');
+                notify('Select at least one campaign', 'error');
                 return;
             }
 
@@ -342,10 +342,10 @@ if (count($ss->tables)>0){
                 if (data.error) {
                     throw new Error(data.result || 'Share failed');
                 }
-                alert(data.result || 'Table shared');
+                notify(data.result || 'Table shared', 'success');
                 jQuery.modal.close();
             } catch (err) {
-                alert('Error sharing table: ' + err.message);
+                notify('Error sharing table: ' + err.message, 'error');
             }
         };
     </script>

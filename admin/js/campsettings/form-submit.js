@@ -115,7 +115,7 @@ document.getElementById("campsettings")?.addEventListener("submit", async (e) =>
     const urlParams = new URLSearchParams(window.location.search);
     const campId = urlParams.get('campId');
     if (campId === null) {
-        alert("No campaign ID found!");
+        notify("No campaign ID found!", 'error');
         return false;
     }
 

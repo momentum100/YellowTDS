@@ -55,9 +55,9 @@ function addColumnsToList(selectedClmns, availableClmns, existingFilters, filter
     updateSaveButtonState();
 }
 
-function handleAddParamColumn(e) {
+async function handleAddParamColumn(e) {
     if (!e.target.closest('#addParamColumn')) return;
-    const name = prompt('URL param name:');
+    const name = await window.promptDialog('URL param name:');
     if (!name || !name.trim()) return;
     const clean = name.trim().replace(/[^a-zA-Z0-9_]/g, '');
     if (!clean) return;
@@ -74,7 +74,7 @@ function setSaveButtonHandler(handlerUrl) {
         const selectedColumns = getSelectedColumns();
         
         if (selectedColumns.length === 0) {
-            alert('Please select at least one column');
+            notify('Please select at least one column', 'error');
             return;
         }
 
@@ -98,7 +98,7 @@ function setSaveButtonHandler(handlerUrl) {
                 throw new Error(data.msg);
             }
         } catch (error) {
-            alert('Error saving columns: ' + error.message);
+            notify('Error saving columns: ' + error.message, 'error');
         }
     });
 }

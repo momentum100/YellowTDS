@@ -174,13 +174,13 @@ $dataset = $db->get_campaigns(
     <script>
         document.addEventListener("DOMContentLoaded", function () {
             document.getElementById("newCampaign").onclick = async () => {
-                let campName = prompt("Enter new campaign name:");
+                let campName = await window.promptDialog("Enter new campaign name:");
                 if (campName)
                     await campEditor('add', null, campName);
             };
 
             document.getElementById("trafficBack").onclick = async () => {
-                let tbUrl = prompt("Enter trafficback url:", "<?= $gs['trafficBackUrl'] ?>");
+                let tbUrl = await window.promptDialog("Enter trafficback url:", "<?= $gs['trafficBackUrl'] ?>");
                 if (tbUrl === null) return;
                 let res = await fetch("commonseditor.php?action=trafficback", {
                     method: "POST",
@@ -188,11 +188,11 @@ $dataset = $db->get_campaigns(
                 });
                 let js = await res.json();
                 if (!js.error) {
-                    alert('TrafficBack url saved!');
+                    notify('TrafficBack url saved!', 'success');
                     window.location.reload();
                 }
                 else
-                    alert('Error saving trafficback url: ' + js.result);
+                    notify('Error saving trafficback url: ' + js.result, 'error');
             };
 
             document.getElementById("trafficBackStats").onclick = () => {
@@ -211,7 +211,7 @@ $dataset = $db->get_campaigns(
                         body: JSON.stringify({ columns: <?= json_encode(array_map(fn($c) => is_array($c) ? $c['field'] : $c, $gs['statistics']['table'])) ?>, filters: {} })
                     });
                     window.location.reload();
-                } catch(e) { alert('Error resetting filters: ' + e.message); }
+                } catch(e) { notify('Error resetting filters: ' + e.message, 'error'); }
             };
             document.getElementById("columnsSelect").onclick = async () => {
                 let availableClmns = <?= json_encode(AvailableColumns::get_columns_for_type('stats')) ?>;

@@ -206,7 +206,7 @@ function findIndexFile(tree) {
 function loadTree() {
     apiCall('list', {}, 'GET').then(function (data) {
         if (data.error) {
-            alert('Error loading tree: ' + data.result);
+            notify('Error loading tree: ' + data.result, 'error');
             return;
         }
         var treeEl = document.getElementById('fe-tree');
@@ -233,8 +233,8 @@ function loadTree() {
 }
 
 // ── Open file ──
-function openFile(filePath) {
-    if (hasUnsavedChanges() && !confirm('You have unsaved changes. Discard?')) return Promise.resolve(false);
+async function openFile(filePath) {
+    if (hasUnsavedChanges() && !(await window.confirmDialog('You have unsaved changes. Discard?'))) return false;
     showEditorLoading('Loading file...');
 
     var ext = filePath.split('.').pop().toLowerCase();
@@ -258,13 +258,13 @@ function openFile(filePath) {
     // Other binary files
     var binaryExts = ['woff', 'woff2', 'ttf', 'eot', 'otf', 'zip', 'gz', 'tar', 'pdf', 'mp3', 'mp4', 'avi', 'mov'];
     if (binaryExts.indexOf(ext) !== -1) {
-        alert('Binary file — cannot edit: ' + filePath);
-        return Promise.resolve(false);
+        notify('Binary file — cannot edit: ' + filePath, 'error');
+        return false;
     }
 
     return apiCall('read', { file: filePath }, 'GET').then(function (data) {
         if (data.error) {
-            alert('Error reading file: ' + data.result);
+            notify('Error reading file: ' + data.result, 'error');
             return false;
         }
         currentFile = filePath;
@@ -273,7 +273,7 @@ function openFile(filePath) {
         isDirty = false;
         return true;
     }).catch(function (err) {
-        alert('Error reading file: ' + err);
+        notify('Error reading file: ' + err, 'error');
         return false;
     });
 }
@@ -320,17 +320,17 @@ function showSearchPanelByDefault() {
 // ── Save file ──
 function saveFile() {
     if (!currentFile) {
-        alert('No file open');
+        notify('No file open', 'error');
         return;
     }
     var content = editorView.state.doc.toString();
     apiCall('save', { file: currentFile, content: content }).then(function (data) {
         if (data.error) {
-            alert('Save error: ' + data.result);
+            notify('Save error: ' + data.result, 'error');
         } else {
             isDirty = false;
             initialContent = normalizeEditorContent(content);
-            alert('Saved successfully!');
+            notify('Saved successfully!', 'success');
         }
     });
 }
@@ -339,8 +339,8 @@ function saveFile() {
 function setupToolbar() {
     document.getElementById('fe-save-btn').addEventListener('click', saveFile);
 
-    document.getElementById('fe-close-btn').addEventListener('click', function () {
-        if (hasUnsavedChanges() && !confirm('You have unsaved changes. Close anyway?')) return;
+    document.getElementById('fe-close-btn').addEventListener('click', async function () {
+        if (hasUnsavedChanges() && !(await window.confirmDialog('You have unsaved changes. Close anyway?'))) return;
         document.getElementById('fe-modal').style.display = 'none';
         document.body.classList.remove('fe-modal-open');
         currentFolder = '';
@@ -359,35 +359,35 @@ function setupToolbar() {
 
     document.getElementById('fe-refresh-btn').addEventListener('click', loadTree);
 
-    document.getElementById('fe-new-file').addEventListener('click', function () {
+    document.getElementById('fe-new-file').addEventListener('click', async function () {
         var selPath = getSelectedPath();
         var selType = getSelectedType();
         var basePath = '';
         if (selPath) {
             basePath = selType === 'dir' ? selPath : selPath.substring(0, selPath.lastIndexOf('/'));
         }
-        var name = prompt('New file name:', '');
+        var name = await window.promptDialog('New file name:', '');
         if (!name || !name.trim()) return;
         var filePath = basePath ? basePath + '/' + name.trim() : name.trim();
         apiCall('create', { file: filePath, type: 'file' }).then(function (data) {
-            if (data.error) { alert(data.result); return; }
+            if (data.error) { notify(data.result, 'error'); return; }
             loadTree();
             openFile(filePath);
         });
     });
 
-    document.getElementById('fe-new-folder').addEventListener('click', function () {
+    document.getElementById('fe-new-folder').addEventListener('click', async function () {
         var selPath = getSelectedPath();
         var selType = getSelectedType();
         var basePath = '';
         if (selPath) {
             basePath = selType === 'dir' ? selPath : selPath.substring(0, selPath.lastIndexOf('/'));
         }
-        var name = prompt('New folder name:', '');
+        var name = await window.promptDialog('New folder name:', '');
         if (!name || !name.trim()) return;
         var dirPath = basePath ? basePath + '/' + name.trim() : name.trim();
         apiCall('create', { file: dirPath, type: 'dir' }).then(function (data) {
-            if (data.error) { alert(data.result); return; }
+            if (data.error) { notify(data.result, 'error'); return; }
             loadTree();
         });
     });
@@ -412,23 +412,23 @@ function setupToolbar() {
             fetch(url, { method: 'POST', body: fd })
                 .then(function (r) { return r.json(); })
                 .then(function (data) {
-                    if (data.error) { alert(data.result); return; }
+                    if (data.error) { notify(data.result, 'error'); return; }
                     loadTree();
                 })
-                .catch(function (err) { alert('Upload failed: ' + err); })
+                .catch(function (err) { notify('Upload failed: ' + err, 'error'); })
                 .finally(function () { fi.remove(); });
         });
         fi.click();
     });
 
-    document.getElementById('fe-rename-btn').addEventListener('click', function () {
+    document.getElementById('fe-rename-btn').addEventListener('click', async function () {
         var selPath = getSelectedPath();
-        if (!selPath) { alert('Select a file or folder first'); return; }
+        if (!selPath) { notify('Select a file or folder first', 'error'); return; }
         var oldName = selPath.split('/').pop();
-        var newName = prompt('Rename to:', oldName);
+        var newName = await window.promptDialog('Rename to:', oldName);
         if (!newName || !newName.trim() || newName.trim() === oldName) return;
         apiCall('rename', { file: selPath, newName: newName.trim() }).then(function (data) {
-            if (data.error) { alert(data.result); return; }
+            if (data.error) { notify(data.result, 'error'); return; }
             if (currentFile === selPath) {
                 currentFile = data.newPath;
                 document.getElementById('fe-current-file').textContent = data.newPath;
@@ -440,7 +440,7 @@ function setupToolbar() {
     document.getElementById('fe-download-btn').addEventListener('click', function () {
         var selPath = getSelectedPath();
         var selType = getSelectedType();
-        if (!selPath || selType === 'dir') { alert('Select a file first'); return; }
+        if (!selPath || selType === 'dir') { notify('Select a file first', 'error'); return; }
         var url = '../' + (currentType === 'white' ? (window.WHITE_FOLDER || 'caching/whites') : (window.LANDING_FOLDER || 'caching/landings')) + '/' + encodeURIComponent(currentFolder) + '/' + selPath.split('/').map(encodeURIComponent).join('/');
         var a = document.createElement('a');
         a.href = url;
@@ -450,12 +450,12 @@ function setupToolbar() {
         a.remove();
     });
 
-    document.getElementById('fe-delete-btn').addEventListener('click', function () {
+    document.getElementById('fe-delete-btn').addEventListener('click', async function () {
         var selPath = getSelectedPath();
-        if (!selPath) { alert('Select a file or folder first'); return; }
-        if (!confirm('Delete "' + selPath + '"?')) return;
+        if (!selPath) { notify('Select a file or folder first', 'error'); return; }
+        if (!(await window.confirmDialog('Delete "' + selPath + '"?'))) return;
         apiCall('delete', { file: selPath }).then(function (data) {
-            if (data.error) { alert(data.result); return; }
+            if (data.error) { notify(data.result, 'error'); return; }
             if (currentFile === selPath) {
                 currentFile = '';
                 document.getElementById('fe-current-file').textContent = '';

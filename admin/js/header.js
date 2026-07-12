@@ -169,7 +169,7 @@ async function saveTimezoneSetting(timezone, config, select) {
 
         window.location.reload();
     } catch (error) {
-        alert('Error saving timezone: ' + error.message);
+        notify('Error saving timezone: ' + error.message, 'error');
         config.pendingTimezone = config.timezone;
         if (select) {
             select.value = config.timezone;
@@ -224,13 +224,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 const response = await fetch('../bases/update.php');
                 const jsr = await response.json();
                 if (!jsr.error) {
-                    alert('Update SUCCESSFULL:\n' + jsr.result);
+                    notify('Update SUCCESSFULL:\n' + jsr.result, 'success');
                     location.reload();
                 } else {
-                    alert('Error updating geobases:\n' + jsr.result);
+                    notify('Error updating geobases:\n' + jsr.result, 'error');
                 }
             } catch (error) {
-                alert('Error updating geobases:\n' + error);
+                notify('Error updating geobases:\n' + error, 'error');
             } finally {
                 if (typingCleanup) typingCleanup();
                 loadingAnimation.style.display = 'none';
@@ -264,27 +264,27 @@ async function checkForUpdates() {
         const result = await sendAutoupdateRequest('check');
         
         if (!result.success) {
-            alert('Error checking for updates: ' + result.message);
+            notify('Error checking for updates: ' + result.message, 'error');
             return;
         }
-        
+
         if (!result.hasUpdate) {
-            alert('Your system is up to date!');
+            notify('Your system is up to date!', 'success');
             return;
         }
-        
-        if (confirm(`An update to version ${result.version} is available. Would you like to update now?`)) {
+
+        if (await window.confirmDialog(`An update to version ${result.version} is available. Would you like to update now?`)) {
             const updateResult = await sendAutoupdateRequest('update');
-            
+
             if (updateResult.success) {
-                alert('Update successful! The page will now reload.');
+                notify('Update successful! The page will now reload.', 'success');
                 location.reload();
             } else {
-                alert('Error updating system: ' + updateResult.error);
+                notify('Error updating system: ' + updateResult.error, 'error');
             }
         }
     } catch (error) {
-        alert('Error updating system: ' + error);
+        notify('Error updating system: ' + error, 'error');
     } finally {
         if (typingCleanup) typingCleanup();
         updateOverlay.style.display = 'none';

@@ -3,6 +3,7 @@ require_once __DIR__ . '/../paths.php';
 $jsFsPath = __DIR__ . '/js';
 $jsPath = get_admin_base_url() . 'js';
 ?>
+<script src="<?=$jsPath?>/toast.js?v=<?=filemtime($jsFsPath . '/toast.js')?>"></script>
 <script src="<?=$jsPath?>/jquery.js"></script>
 <script src="<?=$jsPath?>/jquery.modal.min.js"></script>
 <script src="<?=$jsPath?>/query-builder.standalone.min.js"></script>

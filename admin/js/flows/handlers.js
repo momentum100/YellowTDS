@@ -77,8 +77,8 @@ export function handleStepAddExisting(e) {
     btn.disabled = true;
     fetch('listfolders.php').then(function (r) { return r.json(); }).then(function (data) {
         btn.disabled = false;
-        if (data.error) { alert(data.result); return; }
-        if (!data.folders.length) { alert('No folders found. Upload a ZIP first.'); return; }
+        if (data.error) { notify(data.result, 'error'); return; }
+        if (!data.folders.length) { notify('No folders found. Upload a ZIP first.', 'error'); return; }
 
         openFolderPicker(data.folders).then(function (choice) {
             if (!choice) return;
@@ -88,7 +88,7 @@ export function handleStepAddExisting(e) {
             }
             updateStepListInfo(fi, stepSec.dataset.stepIndex);
         });
-    }).catch(function (err) { btn.disabled = false; alert('Error: ' + err); });
+    }).catch(function (err) { btn.disabled = false; notify('Error: ' + err, 'error'); });
 }
 
 // ── Upload ZIP to a step ──
@@ -129,13 +129,13 @@ export function handleEditFolder(e) {
     if (!item) return;
     var folderInput = item.querySelector('.flow-step-folder');
     if (!folderInput || !folderInput.value.trim()) {
-        alert('Please enter a folder name first.');
+        notify('Please enter a folder name first.', 'error');
         return;
     }
     if (typeof window.openFileEditor === 'function') {
         window.openFileEditor(folderInput.value.trim());
     } else {
-        alert('File editor not loaded.');
+        notify('File editor not loaded.', 'error');
     }
 }
 
@@ -309,10 +309,10 @@ export function handleMoveDown(e) {
 }
 
 // ── Flow list: Delete ──
-export function handleDeleteFlow(e) {
+export async function handleDeleteFlow(e) {
     var btn = e.target.closest('.flow-delete');
     if (!btn) return;
-    if (!confirm('Delete this flow?')) return;
+    if (!(await window.confirmDialog('Delete this flow?'))) return;
     var row = btn.closest('.flow-list-row');
     var fi = row.dataset.flowIndex;
     // Remove all step sections for this flow
@@ -330,8 +330,8 @@ export function handleDeleteFlow(e) {
 }
 
 // ── Add Flow ──
-export function handleAddFlow() {
-    var flowName = prompt('Enter flow name (cannot be changed later):');
+export async function handleAddFlow() {
+    var flowName = await window.promptDialog('Enter flow name (cannot be changed later):');
     if (!flowName || !flowName.trim()) return;
     flowName = flowName.trim();
 
@@ -339,7 +339,7 @@ export function handleAddFlow() {
     var existing = document.querySelectorAll('.flow-name-label');
     for (var i = 0; i < existing.length; i++) {
         if (existing[i].value === flowName) {
-            alert('Flow name "' + flowName + '" already exists. Choose a different name.');
+            notify('Flow name "' + flowName + '" already exists. Choose a different name.', 'error');
             return;
         }
     }

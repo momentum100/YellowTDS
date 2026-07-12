@@ -91,7 +91,7 @@
 
             // stop append HTML if maximum limit exceed
             if (settings.maxLimit != 0 && settings.counterIndex >= settings.maxLimit) {
-                alert("Max limit exceeded!");
+                notify("Max limit exceeded!", 'error');
                 return false;
             }
 
@@ -322,13 +322,14 @@
             var count = _count();
             if (count > settings.minLimit) {
                 if (settings.removeConfirm) {
-                    if (confirm(settings.removeConfirmMessage)) {
+                    window.confirmDialog(settings.removeConfirmMessage).then(function (ok) {
+                        if (!ok) return;
                         $elem.parents('.' + settings.cloneContainer).slideUp(function () {
                             $(this).remove();
                             _updateAttributes();
                             settings.afterRemove.call(this);
                         });
-                    }
+                    });
                 }
                 else {
                     $elem.parents('.' + settings.cloneContainer).slideUp(function () {
@@ -338,7 +339,7 @@
                     });
                 }
             } else {
-                alert('you must have at least one item.');
+                notify('you must have at least one item.', 'error');
             }
         };
 
